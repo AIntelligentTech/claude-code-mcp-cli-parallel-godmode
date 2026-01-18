@@ -23,8 +23,8 @@ fi
 # Check if it's a simple single call (not part of parallel orchestration)
 # A parallel orchestration includes '&' and 'wait'
 if [[ "$COMMAND" != *"&"* ]] && [[ "$COMMAND" != *"wait"* ]]; then
-    # Single sequential call - provide feedback
-    echo '{"hookSpecificOutput":{"feedback":"[MCP-PARALLEL] Use parallel orchestration for 2+ MCP calls (2x-18x faster). Pattern: mcp-cli call ... & mcp-cli call ... & wait"}}'
+    # Single sequential call - provide feedback with rule reference and correct pattern
+    echo '{"hookSpecificOutput":{"feedback":"[MCP-PARALLEL] For 2+ MCP calls, use parallel orchestration (2x-18x faster). See .claude/rules/mcp-parallel.md. Pattern: mcp-cli call server/tool1 {} > /tmp/r1.json & mcp-cli call server/tool2 {} > /tmp/r2.json & wait"}}'
 fi
 
 exit 0  # Always allow (advisory mode)
