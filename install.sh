@@ -20,10 +20,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
-print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+print_success() { printf "${GREEN}[OK]${NC} %s\n" "$1"; }
+print_warning() { printf "${YELLOW}[WARN]${NC} %s\n" "$1"; }
+print_error() { printf "${RED}[ERROR]${NC} %s\n" "$1"; }
+print_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1"; }
 
 show_help() {
     cat << EOF
@@ -60,22 +60,82 @@ Examples:
 EOF
 }
 
+detect_shell_profile() {
+    # Detect the appropriate shell profile
+    if [ -n "$ZSH_VERSION" ] || [ "$SHELL" = "$(command -v zsh)" ]; then
+        echo "$HOME/.zshrc"
+    elif [ -n "$BASH_VERSION" ] || [ "$SHELL" = "$(command -v bash)" ]; then
+        if [ -f "$HOME/.bash_profile" ]; then
+            echo "$HOME/.bash_profile"
+        else
+            echo "$HOME/.bashrc"
+        fi
+    else
+        echo "$HOME/.profile"
+    fi
+}
+
 check_prerequisites() {
-    if [ "${ENABLE_EXPERIMENTAL_MCP_CLI}" != "true" ]; then
-        print_warning "ENABLE_EXPERIMENTAL_MCP_CLI is not set"
-        echo "  Add to your shell profile:"
-        echo "    export ENABLE_EXPERIMENTAL_MCP_CLI=true"
-        echo ""
+    # Check HOME is set (required for --user install)
+    if [ -z "$HOME" ]; then
+        print_error "HOME environment variable is not set"
+        exit 1
     fi
 
-    if ! command -v jq &> /dev/null; then
-        print_error "jq is required but not installed"
-        echo "  Install with:"
-        echo "    macOS:  brew install jq"
-        echo "    Ubuntu: sudo apt-get install jq"
-        echo "    Fedora: sudo dnf install jq"
+    # Check and install jq if missing
+    if ! command -v jq >/dev/null 2>&1; then
+        print_warning "jq is required but not installed"
+
+        # Try to auto-install based on platform
+        if command -v brew >/dev/null 2>&1; then
+            print_info "Installing jq via Homebrew..."
+            brew install jq
+        elif command -v apt-get >/dev/null 2>&1; then
+            print_info "Installing jq via apt..."
+            sudo apt-get update -qq && sudo apt-get install -y jq
+        elif command -v dnf >/dev/null 2>&1; then
+            print_info "Installing jq via dnf..."
+            sudo dnf install -y jq
+        elif command -v yum >/dev/null 2>&1; then
+            print_info "Installing jq via yum..."
+            sudo yum install -y jq
+        elif command -v pacman >/dev/null 2>&1; then
+            print_info "Installing jq via pacman..."
+            sudo pacman -S --noconfirm jq
+        else
+            print_error "Could not auto-install jq. Please install manually:"
+            echo "  macOS:  brew install jq"
+            echo "  Ubuntu: sudo apt install jq"
+            echo "  Fedora: sudo dnf install jq"
+            exit 1
+        fi
+
+        # Verify installation
+        if command -v jq >/dev/null 2>&1; then
+            print_success "jq installed successfully"
+        else
+            print_error "jq installation failed"
+            exit 1
+        fi
+    fi
+
+    # Check and configure ENABLE_EXPERIMENTAL_MCP_CLI
+    if [ "${ENABLE_EXPERIMENTAL_MCP_CLI}" != "true" ]; then
+        SHELL_PROFILE=$(detect_shell_profile)
+
+        # Check if already in profile but not exported in current session
+        if grep -q "ENABLE_EXPERIMENTAL_MCP_CLI=true" "$SHELL_PROFILE" 2>/dev/null; then
+            print_warning "ENABLE_EXPERIMENTAL_MCP_CLI is in $SHELL_PROFILE but not active"
+            echo "  Run: source $SHELL_PROFILE"
+        else
+            print_info "Adding ENABLE_EXPERIMENTAL_MCP_CLI to $SHELL_PROFILE"
+            echo "" >> "$SHELL_PROFILE"
+            echo "# MCP CLI (required for claude-code mcp-cli)" >> "$SHELL_PROFILE"
+            echo "export ENABLE_EXPERIMENTAL_MCP_CLI=true" >> "$SHELL_PROFILE"
+            print_success "Added to $SHELL_PROFILE"
+            echo "  Note: Restart your terminal or run: source $SHELL_PROFILE"
+        fi
         echo ""
-        exit 1
     fi
 }
 
@@ -224,7 +284,7 @@ install_files() {
         print_success "CLAUDE.md contains MCP instructions"
     else
         print_error "CLAUDE.md missing or incomplete"
-        ((failures++))
+        failures=$((failures + 1))
     fi
 
     # Check rules
@@ -232,7 +292,7 @@ install_files() {
         print_success "rules/mcp-parallel.md exists"
     else
         print_error "rules/mcp-parallel.md missing"
-        ((failures++))
+        failures=$((failures + 1))
     fi
 
     # Check hook scripts exist and are executable
@@ -240,14 +300,14 @@ install_files() {
         print_success "hooks/mcp-cli-gate.sh exists and executable"
     else
         print_error "hooks/mcp-cli-gate.sh missing or not executable"
-        ((failures++))
+        failures=$((failures + 1))
     fi
 
     if [ -x "$target_dir/hooks/mcp-parallel-reminder.sh" ]; then
         print_success "hooks/mcp-parallel-reminder.sh exists and executable"
     else
         print_error "hooks/mcp-parallel-reminder.sh missing or not executable"
-        ((failures++))
+        failures=$((failures + 1))
     fi
 
     # Check hooks.json contains both hooks
@@ -266,17 +326,17 @@ install_files() {
             print_success "hooks.json registers both hooks"
         elif [ "$gate_registered" = false ] && [ "$reminder_registered" = false ]; then
             print_error "hooks.json missing both MCP hooks"
-            ((failures++))
+            failures=$((failures + 1))
         elif [ "$gate_registered" = false ]; then
             print_error "hooks.json missing mcp-cli-gate.sh"
-            ((failures++))
+            failures=$((failures + 1))
         else
             print_error "hooks.json missing mcp-parallel-reminder.sh"
-            ((failures++))
+            failures=$((failures + 1))
         fi
     else
         print_error "hooks.json not found at $hooks_file"
-        ((failures++))
+        failures=$((failures + 1))
     fi
 
     # Summary

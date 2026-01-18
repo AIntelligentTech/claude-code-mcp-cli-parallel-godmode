@@ -14,11 +14,12 @@ if [ "$TOOL_NAME" != "Bash" ]; then
     exit 0
 fi
 
-# Check if this is an mcp-cli call
+# Check if this is an mcp-cli call (POSIX-compatible pattern match)
 COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
-if [[ "$COMMAND" != *"mcp-cli"* ]]; then
-    exit 0  # Not an mcp-cli call, pass through
-fi
+case "$COMMAND" in
+    *mcp-cli*) ;;  # Contains mcp-cli, continue checking
+    *) exit 0 ;;   # Not an mcp-cli call, pass through
+esac
 
 # Check if experimental flag is enabled
 if [ "${ENABLE_EXPERIMENTAL_MCP_CLI}" != "true" ]; then

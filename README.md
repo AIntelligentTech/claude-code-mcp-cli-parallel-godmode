@@ -20,31 +20,71 @@
 
 ## Quick Start
 
+**Install (all projects):**
 ```bash
-# 1. Enable mcp-cli
-echo 'export ENABLE_EXPERIMENTAL_MCP_CLI=true' >> ~/.zshrc && source ~/.zshrc
-
-# 2. Install (requires jq)
-git clone https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode.git
-cd claude-code-mcp-cli-parallel-godmode
-./install.sh --user
-
-# 3. Restart Claude Code - done!
+curl -fsSL https://raw.githubusercontent.com/yourusername/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash
 ```
+
+**Install (current project only):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/yourusername/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash -s -- --project .
+```
+
+Then restart Claude Code.
+
+<details>
+<summary>What the installer does</summary>
+
+- Installs `jq` if missing (via brew/apt/dnf/yum/pacman)
+- Adds `ENABLE_EXPERIMENTAL_MCP_CLI=true` to your shell profile
+- Installs hooks and rules
+- Verifies all components
+
+</details>
+
+<details>
+<summary>Manual install</summary>
+
+```bash
+git clone --depth 1 https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode.git /tmp/mcp-parallel
+/tmp/mcp-parallel/install.sh --user
+rm -rf /tmp/mcp-parallel
+```
+
+</details>
 
 ---
 
 ## Why This Exists
 
-Claude Code runs MCP calls **sequentially** — each call waits for the previous one to complete.
+Claude Code runs MCP calls **sequentially** by default — each call waits for the previous one to complete:
 
 ```
-Sequential: [call 1: 3.8s] → [call 2: 3.8s] → [call 3: 3.8s] → ... = 76s for 20 calls
-Parallel:   [call 1 ─┬─ call 2 ─┬─ call 3 ─┬─ ...] = 4.9s for 20 calls
-                     └──────────┴──────────┘
+Default:  [call 1: 3.8s] → [call 2: 3.8s] → [call 3: 3.8s] → ... = 76s for 20 calls
 ```
 
-This toolkit teaches Claude Code to run `mcp-cli` calls in parallel using bash background jobs.
+This toolkit enables **two levels of parallelization**:
+
+### Level 1: Parallel calls within a single Bash invocation
+
+Using background jobs (`&`) and `wait`, multiple MCP calls run simultaneously:
+
+```
+Single Bash call:  [call 1 ─┬─ call 2 ─┬─ call 3 ─┬─ ...] = 4.9s for 20 calls
+                            └──────────┴──────────┘
+```
+
+### Level 2: Multiple parallel Bash tool calls
+
+Claude Code can invoke multiple Bash tools simultaneously. Combined with Level 1:
+
+```
+┌─ Bash call 1: [mcp-cli & mcp-cli & wait] ─┐
+├─ Bash call 2: [mcp-cli & mcp-cli & wait] ─┼─ All run in parallel
+└─ Bash call 3: [mcp-cli & mcp-cli & wait] ─┘
+```
+
+**Result:** 4×5 parallel calls performs similarly to 1×20 — layers compose without penalty.
 
 ---
 
@@ -143,9 +183,8 @@ Applies to a single project only:
 ### Uninstall
 
 ```bash
-./install.sh --uninstall --user
-# or
-./install.sh --uninstall --project /path/to/project
+curl -fsSL https://raw.githubusercontent.com/.../get.sh | bash -s -- --uninstall --user
+# or: --uninstall --project .
 ```
 
 ---
@@ -177,44 +216,59 @@ The installer blocks if `jq` is missing.
 ### Basic: Parallel Calls
 
 ```bash
+# Run 3 calls in parallel, wait for all to complete
 mcp-cli call server/tool1 '{}' > /tmp/r1.json &
 mcp-cli call server/tool2 '{}' > /tmp/r2.json &
 mcp-cli call server/tool3 '{}' > /tmp/r3.json &
 wait
 
-cat /tmp/r1.json /tmp/r2.json /tmp/r3.json
+# Process results
+jq -s '.' /tmp/r1.json /tmp/r2.json /tmp/r3.json
 ```
 
-### Advanced: Dependency Waves
+### Dependency Waves
 
-When some calls depend on earlier results:
+When calls depend on earlier results, use waves:
 
 ```bash
-# Wave 1: Independent calls
+# Wave 1: Independent calls run in parallel
 mcp-cli call server/list_items '{}' > /tmp/items.json &
 mcp-cli call server/get_config '{}' > /tmp/config.json &
 wait
 
-# Extract value from Wave 1
+# Extract value needed for Wave 2
 ITEM_ID=$(jq -r '.items[0].id' /tmp/items.json)
 
-# Wave 2: Dependent calls
+# Wave 2: Dependent calls (also parallel)
 mcp-cli call server/get_item "{\"id\":\"$ITEM_ID\"}" > /tmp/item.json &
 mcp-cli call server/get_history "{\"id\":\"$ITEM_ID\"}" > /tmp/history.json &
 wait
 ```
 
-### Large Batches: Wave Batching (50+ calls)
+### Large Batches (50+ calls)
+
+Batch into waves of 20-25 to avoid resource exhaustion:
 
 ```bash
-# Process in waves of 20-25 to avoid resource exhaustion
-for wave in 1 2 3; do
-  start=$((($wave - 1) * 20 + 1))
-  for i in $(seq $start $(($start + 19))); do
-    mcp-cli call server/tool '{}' > /tmp/r$i.json &
-  done
-  wait
+# Process 60 items in 3 waves
+ITEMS=$(seq 1 60)
+BATCH_SIZE=20
+
+for item in $ITEMS; do
+  mcp-cli call server/process "{\"id\":$item}" > "/tmp/r${item}.json" &
+  # Every BATCH_SIZE items, wait for batch to complete
+  [ $((item % BATCH_SIZE)) -eq 0 ] && wait
 done
+wait  # Final batch
+```
+
+### With Error Handling
+
+```bash
+# Capture stdout and stderr separately
+mcp-cli call server/tool '{}' > /tmp/result.json 2> /tmp/error.log &
+pid=$!
+wait $pid || echo "Call failed: $(cat /tmp/error.log)"
 ```
 
 ---
