@@ -2,8 +2,8 @@
 # MCP Parallel Orchestration Validator
 # Warns when sequential mcp-cli calls are detected (advisory mode)
 #
-# Part of claude-code-mcp-codegen-godmode
-# https://github.com/yourusername/claude-code-mcp-codegen-godmode
+# Part of claude-code-mcp-cli-parallel-godmode
+# https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode
 
 # Read tool input from stdin
 INPUT=$(cat)

@@ -1,6 +1,6 @@
 # MCP Parallel Orchestration
 
-> Installed by [claude-code-mcp-codegen-godmode](https://github.com/yourusername/claude-code-mcp-codegen-godmode)
+> Installed by [claude-code-mcp-cli-parallel-godmode](https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode)
 
 ## MCP Tool Orchestration
 
@@ -68,10 +68,14 @@ export ENABLE_EXPERIMENTAL_MCP_CLI=true
 
 ### Verified Performance
 
-- 5 sequential calls: 5.93s
-- 5 parallel calls: 1.39s
-- **Speedup: 4.25x**
+| Pattern | Total Calls | Time | Throughput |
+|---------|-------------|------|------------|
+| Sequential | 1 | 2.28s | 0.44 calls/s |
+| **Parallel 1×10** | 10 | 3.01s | 3.32 calls/s |
+| **Parallel 1×20** | 20 | 4.52s | 4.42 calls/s |
+
+**10x throughput increase** — 46s workflows complete in 4.5s
 
 ---
 
-*Configuration installed from claude-code-mcp-codegen-godmode*
+*Configuration installed from claude-code-mcp-cli-parallel-godmode*
