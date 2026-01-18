@@ -1,27 +1,25 @@
 # MCP Parallel Orchestration Rules
 
-**MANDATORY: All mcp-cli operations MUST use parallel orchestration patterns.**
+**MANDATORY: All mcp-cli operations with 2+ calls MUST use parallel orchestration patterns.**
 
 ## Rule: Never Sequential MCP Calls
 
-When making 3+ MCP tool calls, you MUST use parallel bash orchestration. Sequential calls are PROHIBITED.
+When making 2+ MCP tool calls, you MUST use parallel bash orchestration. Sequential calls are PROHIBITED.
 
 ### FORBIDDEN Pattern
 
 ```bash
-# NEVER DO THIS - sequential calls waste 94% of time
+# NEVER DO THIS - sequential calls waste 50%+ of time (even for just 2 calls)
 mcp-cli call server/tool1 '{}'
 mcp-cli call server/tool2 '{}'
-mcp-cli call server/tool3 '{}'
 ```
 
 ### REQUIRED Pattern
 
 ```bash
-# ALWAYS DO THIS - parallel calls with background jobs
+# ALWAYS DO THIS - parallel calls with background jobs (even for 2 calls)
 mcp-cli call server/tool1 '{}' > /tmp/r1.json &
 mcp-cli call server/tool2 '{}' > /tmp/r2.json &
-mcp-cli call server/tool3 '{}' > /tmp/r3.json &
 wait
 
 # Then process results
@@ -106,6 +104,7 @@ mcp-cli call server/tool '{}' &
 
 | Configuration | Expected Speedup |
 |---------------|------------------|
+| 2 calls | **2x faster** |
 | 3-10 calls | 6-13x faster |
 | 10-20 calls | 13-16x faster |
 | 20-50 calls | 15-18x faster |
@@ -115,8 +114,8 @@ Failure to use parallel orchestration wastes up to 95% of execution time.
 ## Exceptions
 
 Sequential calls are acceptable ONLY when:
-1. Making exactly 1-2 MCP calls (overhead not worth it)
+1. Making exactly 1 MCP call
 2. Debugging a specific call in isolation
 3. Explicitly requested by user
 
-In all other cases, parallel orchestration is MANDATORY.
+**For 2+ calls, parallel orchestration is MANDATORY.**

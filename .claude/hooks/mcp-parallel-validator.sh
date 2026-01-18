@@ -24,7 +24,7 @@ fi
 # A parallel orchestration includes '&' and 'wait'
 if [[ "$COMMAND" != *"&"* ]] && [[ "$COMMAND" != *"wait"* ]]; then
     # Single sequential call - provide feedback
-    echo '{"hookSpecificOutput":{"feedback":"[MCP-PARALLEL] Consider using parallel orchestration for multiple MCP calls. Pattern: mcp-cli call ... & mcp-cli call ... & wait"}}'
+    echo '{"hookSpecificOutput":{"feedback":"[MCP-PARALLEL] Use parallel orchestration for 2+ MCP calls (2x-18x faster). Pattern: mcp-cli call ... & mcp-cli call ... & wait"}}'
 fi
 
 exit 0  # Always allow (advisory mode)

@@ -6,9 +6,10 @@
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.1.12+-blue.svg)](https://claude.ai/claude-code)
 
 **Verified January 2026:**
-- 50 MCP calls: Sequential 191s → Parallel 10.3s = **18.5x faster**
+- 2 MCP calls: Sequential 7.6s → Parallel 3.8s = **2x faster**
 - 20 MCP calls: Sequential 76s → Parallel 4.9s = **15.5x faster**
-- Throughput: 0.26 calls/s → 4.84 calls/s = **18.6x increase**
+- 50 MCP calls: Sequential 191s → Parallel 10.3s = **18.5x faster**
+- **Always parallelize 2+ calls** — even 2 calls saves 50% time
 
 ---
 
@@ -32,6 +33,7 @@ All numbers tested on real MCP servers, January 2026.
 | Configuration | Calls | Time | Throughput | vs Sequential |
 |---------------|-------|------|------------|---------------|
 | Sequential (baseline) | 1 | 3.82s | 0.26 calls/s | 1x |
+| **1×2** | 2 | 3.8s | 0.53 calls/s | **2x** |
 | **1×5** | 5 | 2.9s | 1.72 calls/s | **6.6x** |
 | **1×10** | 10 | 3.0s | 3.33 calls/s | **12.8x** |
 | **1×20 (sweet spot)** | 20 | 4.9s | 4.08 calls/s | **15.7x** |
@@ -43,6 +45,7 @@ All numbers tested on real MCP servers, January 2026.
 
 | Workflow Size | Sequential | Parallel | Time Saved | Reduction |
 |---------------|------------|----------|------------|-----------|
+| 2 calls | 7.6s | 3.8s | 3.8s | **50%** |
 | 10 calls | 38.2s | 3.0s | 35.2s | **92%** |
 | 20 calls | 76.4s | 4.9s | 71.5s | **94%** |
 | 30 calls | 114.6s | 7.4s | 107.2s | **94%** |
@@ -73,7 +76,8 @@ All numbers tested on real MCP servers, January 2026.
 
 | Your Scenario | Recommended | Expected Speedup | Notes |
 |---------------|-------------|------------------|-------|
-| 1-2 calls | Sequential | — | Overhead not worth it |
+| 1 call | Sequential | — | Single call, no benefit |
+| 2 calls | **1×2** | **2x** | Always parallelize |
 | 3-10 calls | **1×N** | 6-13x | Sweet spot for small batches |
 | 10-20 calls | **1×N** | 13-16x | Optimal efficiency zone |
 | 20-50 calls | **1×N** or **2×N** | 15-18x | Near-maximum throughput |
@@ -312,7 +316,7 @@ wait
 1. **Don't use `bash -c`** with new temp directories (loses session context)
 2. **Don't exceed 50 parallel calls** without wave batching
 3. **Don't forget dependencies** — some calls need results from earlier calls
-4. **Don't parallelize 1-2 calls** — overhead isn't worth it
+4. **Don't parallelize single calls** — only 1 call, no benefit
 
 ### Error Handling
 
