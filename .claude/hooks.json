@@ -1,0 +1,17 @@
+{
+  "description": "MCP Parallel Orchestration hooks - warns/enforces parallel MCP call patterns",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/mcp-parallel-validator.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
