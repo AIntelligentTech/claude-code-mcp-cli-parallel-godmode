@@ -121,9 +121,9 @@ install_files() {
     # ============================================
     # Install Hooks
     # ============================================
-    cp "$SCRIPT_DIR/.claude/hooks/mcp-parallel-validator.sh" "$target_dir/hooks/"
-    chmod +x "$target_dir/hooks/mcp-parallel-validator.sh"
-    print_success "Installed hooks/mcp-parallel-validator.sh (advisory)"
+    cp "$SCRIPT_DIR/.claude/hooks/mcp-parallel-reminder.sh" "$target_dir/hooks/"
+    chmod +x "$target_dir/hooks/mcp-parallel-reminder.sh"
+    print_success "Installed hooks/mcp-parallel-reminder.sh (advisory)"
 
     cp "$SCRIPT_DIR/.claude/hooks/mcp-cli-gate.sh" "$target_dir/hooks/"
     chmod +x "$target_dir/hooks/mcp-cli-gate.sh"
@@ -145,9 +145,9 @@ install_files() {
         echo '      "hooks": [{'
         echo '        "type": "command",'
         if [ "$is_user_level" = "true" ]; then
-            echo '        "command": "${HOME}/.claude/hooks/mcp-parallel-validator.sh",'
+            echo '        "command": "${HOME}/.claude/hooks/mcp-parallel-reminder.sh",'
         else
-            echo '        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/mcp-parallel-validator.sh",'
+            echo '        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/mcp-parallel-reminder.sh",'
         fi
         echo '        "timeout": 5'
         echo '      }]'
@@ -165,7 +165,7 @@ install_files() {
         "hooks": [
           {
             "type": "command",
-            "command": "${HOME}/.claude/hooks/mcp-parallel-validator.sh",
+            "command": "${HOME}/.claude/hooks/mcp-parallel-reminder.sh",
             "timeout": 5
           }
         ]
@@ -220,9 +220,9 @@ uninstall_files() {
     fi
 
     # Remove hooks
-    if [ -f "$target_dir/hooks/mcp-parallel-validator.sh" ]; then
-        rm "$target_dir/hooks/mcp-parallel-validator.sh"
-        print_success "Removed hooks/mcp-parallel-validator.sh"
+    if [ -f "$target_dir/hooks/mcp-parallel-reminder.sh" ]; then
+        rm "$target_dir/hooks/mcp-parallel-reminder.sh"
+        print_success "Removed hooks/mcp-parallel-reminder.sh"
     fi
 
     if [ -f "$target_dir/hooks/mcp-cli-gate.sh" ]; then

@@ -1,6 +1,6 @@
 #!/bin/bash
-# MCP Parallel Orchestration Validator
-# Warns when sequential mcp-cli calls are detected (advisory mode)
+# MCP Parallel Orchestration Reminder
+# Reminds to use parallel pattern when mcp-cli calls are detected
 #
 # Part of claude-code-mcp-cli-parallel-godmode
 # https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode

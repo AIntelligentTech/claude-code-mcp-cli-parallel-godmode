@@ -347,8 +347,8 @@ This toolkit uses **four layers** of enforcement to ensure Claude Code uses para
 │   Detailed enforcement rules auto-loaded by Claude Code     │
 │   FORBIDDEN/REQUIRED patterns with examples                 │
 ├─────────────────────────────────────────────────────────────┤
-│ Layer 3: Advisory Hook (mcp-parallel-validator.sh)          │
-│   Runtime warning when sequential mcp-cli calls detected    │
+│ Layer 3: Reminder Hook (mcp-parallel-reminder.sh)           │
+│   Reminds to use parallel pattern for mcp-cli calls         │
 │   Suggests parallel pattern without blocking                │
 ├─────────────────────────────────────────────────────────────┤
 │ Layer 4: Guard Hook (mcp-cli-gate.sh)                       │
@@ -363,7 +363,7 @@ This toolkit uses **four layers** of enforcement to ensure Claude Code uses para
 |------|---------|-------|
 | `CLAUDE.md` | Concise instructions (references rules) | Context |
 | `.claude/rules/mcp-parallel.md` | Detailed enforcement rules | Rules |
-| `.claude/hooks/mcp-parallel-validator.sh` | Advisory: warns on sequential calls | Hook |
+| `.claude/hooks/mcp-parallel-reminder.sh` | Reminder: suggests parallel pattern | Hook |
 | `.claude/hooks/mcp-cli-gate.sh` | Guard: blocks if env var not set | Hook |
 | `.claude/hooks.json` | Hook configuration | Config |
 
