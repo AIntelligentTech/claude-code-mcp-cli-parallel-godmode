@@ -69,9 +69,13 @@ check_prerequisites() {
     fi
 
     if ! command -v jq &> /dev/null; then
-        print_warning "jq is not installed (required for hooks)"
-        echo "  Install with: brew install jq"
+        print_error "jq is required but not installed"
+        echo "  Install with:"
+        echo "    macOS:  brew install jq"
+        echo "    Ubuntu: sudo apt-get install jq"
+        echo "    Fedora: sudo dnf install jq"
         echo ""
+        exit 1
     fi
 }
 
@@ -130,80 +134,173 @@ install_files() {
     print_success "Installed hooks/mcp-cli-gate.sh (env guard)"
 
     # ============================================
-    # Install hooks.json
+    # Install hooks.json (with auto-merge)
     # ============================================
     local hooks_file="$target_dir/hooks.json"
     if [ "$is_user_level" = "true" ]; then
         hooks_file="$target_dir/hooks/hooks.json"
     fi
 
-    if [ -f "$hooks_file" ]; then
-        print_warning "hooks.json already exists"
-        echo "  Manual merge required. Add this to PreToolUse hooks:"
-        echo '    {'
-        echo '      "matcher": "Bash",'
-        echo '      "hooks": [{'
-        echo '        "type": "command",'
-        if [ "$is_user_level" = "true" ]; then
-            echo '        "command": "${HOME}/.claude/hooks/mcp-parallel-reminder.sh",'
-        else
-            echo '        "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/mcp-parallel-reminder.sh",'
-        fi
-        echo '        "timeout": 5'
-        echo '      }]'
-        echo '    }'
+    # Determine the hooks path variable for this install type
+    # sed_path has backslash for sed substitution, raw_path is for jq
+    local sed_path raw_path
+    if [ "$is_user_level" = "true" ]; then
+        sed_path='\${HOME}/.claude/hooks'
+        raw_path='${HOME}/.claude/hooks'
     else
-        # Create hooks.json with appropriate paths
-        if [ "$is_user_level" = "true" ]; then
-            cat > "$hooks_file" << 'EOF'
-{
-  "description": "MCP Parallel Orchestration hooks",
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${HOME}/.claude/hooks/mcp-parallel-reminder.sh",
-            "timeout": 5
-          }
-        ]
-      }
-    ]
-  }
-}
-EOF
+        sed_path='\${CLAUDE_PROJECT_DIR}/.claude/hooks'
+        raw_path='${CLAUDE_PROJECT_DIR}/.claude/hooks'
+    fi
+
+    # Generate our hooks from template
+    local our_hooks
+    our_hooks=$(sed "s|{{HOOKS_PATH}}|$sed_path|g" "$SCRIPT_DIR/.claude/hooks.template.json")
+
+    if [ -f "$hooks_file" ]; then
+        # Check if our hooks are already present
+        if grep -q "mcp-parallel-reminder.sh" "$hooks_file" 2>/dev/null; then
+            # Check if gate is also present
+            if grep -q "mcp-cli-gate.sh" "$hooks_file" 2>/dev/null; then
+                print_warning "MCP hooks already installed in hooks.json, skipping..."
+            else
+                # Reminder exists but gate doesn't - need to add gate
+                print_info "Adding mcp-cli-gate.sh to existing hooks..."
+                local gate_command="$raw_path/mcp-cli-gate.sh"
+                # Insert gate hook before reminder hook (use --arg to pass string, build object in jq)
+                jq --arg cmd "$gate_command" '
+                    .hooks.PreToolUse |= map(
+                        if .matcher == "Bash" then
+                            .hooks |= ([{"type":"command","command":$cmd,"timeout":5}] + map(select(.command | contains("mcp-cli-gate") | not)))
+                        else . end
+                    )
+                ' "$hooks_file" > "$hooks_file.tmp" && mv "$hooks_file.tmp" "$hooks_file"
+                print_success "Added mcp-cli-gate.sh to hooks.json"
+            fi
         else
-            cp "$SCRIPT_DIR/.claude/hooks.json" "$target_dir/hooks.json"
+            # No MCP hooks present - merge our hooks into existing file
+            print_info "Merging MCP hooks into existing hooks.json..."
+            local our_pretooluse
+            our_pretooluse=$(echo "$our_hooks" | jq '.hooks.PreToolUse[0]')
+
+            # Check if PreToolUse array exists and has Bash matcher
+            if jq -e '.hooks.PreToolUse' "$hooks_file" > /dev/null 2>&1; then
+                # PreToolUse exists - check for existing Bash matcher
+                if jq -e '.hooks.PreToolUse[] | select(.matcher == "Bash")' "$hooks_file" > /dev/null 2>&1; then
+                    # Bash matcher exists - append our hooks to it
+                    local our_hook_entries
+                    our_hook_entries=$(echo "$our_hooks" | jq '.hooks.PreToolUse[0].hooks')
+                    jq --argjson newhooks "$our_hook_entries" '
+                        .hooks.PreToolUse |= map(
+                            if .matcher == "Bash" then .hooks += $newhooks else . end
+                        )
+                    ' "$hooks_file" > "$hooks_file.tmp" && mv "$hooks_file.tmp" "$hooks_file"
+                else
+                    # No Bash matcher - add our entire PreToolUse entry
+                    jq --argjson entry "$our_pretooluse" '.hooks.PreToolUse += [$entry]' "$hooks_file" > "$hooks_file.tmp" && mv "$hooks_file.tmp" "$hooks_file"
+                fi
+            else
+                # No PreToolUse - add it
+                jq --argjson entry "$our_pretooluse" '.hooks.PreToolUse = [$entry]' "$hooks_file" > "$hooks_file.tmp" && mv "$hooks_file.tmp" "$hooks_file"
+            fi
+            print_success "Merged MCP hooks into hooks.json"
         fi
+    else
+        # No existing hooks.json - create from template
+        echo "$our_hooks" > "$hooks_file"
         print_success "Created hooks.json (hook configuration)"
     fi
 
-    # Add gate hook if strict mode
-    if [ "$strict_mode" = "true" ]; then
-        print_warning "Strict mode: You'll need to manually add mcp-cli-gate.sh to hooks.json"
-        echo "  See README.md for configuration details"
+    # ============================================
+    # Verify Installation
+    # ============================================
+    echo ""
+    echo "Verifying installation..."
+    echo ""
+
+    local failures=0
+
+    # Check CLAUDE.md
+    if [ -f "$target_dir/CLAUDE.md" ] && grep -q "MCP Parallel Orchestration" "$target_dir/CLAUDE.md" 2>/dev/null; then
+        print_success "CLAUDE.md contains MCP instructions"
+    else
+        print_error "CLAUDE.md missing or incomplete"
+        ((failures++))
     fi
 
+    # Check rules
+    if [ -f "$target_dir/rules/mcp-parallel.md" ]; then
+        print_success "rules/mcp-parallel.md exists"
+    else
+        print_error "rules/mcp-parallel.md missing"
+        ((failures++))
+    fi
+
+    # Check hook scripts exist and are executable
+    if [ -x "$target_dir/hooks/mcp-cli-gate.sh" ]; then
+        print_success "hooks/mcp-cli-gate.sh exists and executable"
+    else
+        print_error "hooks/mcp-cli-gate.sh missing or not executable"
+        ((failures++))
+    fi
+
+    if [ -x "$target_dir/hooks/mcp-parallel-reminder.sh" ]; then
+        print_success "hooks/mcp-parallel-reminder.sh exists and executable"
+    else
+        print_error "hooks/mcp-parallel-reminder.sh missing or not executable"
+        ((failures++))
+    fi
+
+    # Check hooks.json contains both hooks
+    if [ -f "$hooks_file" ]; then
+        local gate_registered=false
+        local reminder_registered=false
+
+        if grep -q "mcp-cli-gate.sh" "$hooks_file" 2>/dev/null; then
+            gate_registered=true
+        fi
+        if grep -q "mcp-parallel-reminder.sh" "$hooks_file" 2>/dev/null; then
+            reminder_registered=true
+        fi
+
+        if [ "$gate_registered" = true ] && [ "$reminder_registered" = true ]; then
+            print_success "hooks.json registers both hooks"
+        elif [ "$gate_registered" = false ] && [ "$reminder_registered" = false ]; then
+            print_error "hooks.json missing both MCP hooks"
+            ((failures++))
+        elif [ "$gate_registered" = false ]; then
+            print_error "hooks.json missing mcp-cli-gate.sh"
+            ((failures++))
+        else
+            print_error "hooks.json missing mcp-parallel-reminder.sh"
+            ((failures++))
+        fi
+    else
+        print_error "hooks.json not found at $hooks_file"
+        ((failures++))
+    fi
+
+    # Summary
     echo ""
     echo "============================================"
-    print_success "Installation complete!"
-    echo "============================================"
-    echo ""
-    echo "Installed components:"
-    echo "  - CLAUDE.md              Instructions (in model context)"
-    echo "  - rules/mcp-parallel.md  Enforcement rules (auto-loaded)"
-    echo "  - hooks/                 Runtime validation"
-    echo ""
-    echo "Next steps:"
-    echo "  1. Ensure ENABLE_EXPERIMENTAL_MCP_CLI=true in your shell profile"
-    echo "  2. Restart Claude Code"
-    echo "  3. Claude will now use parallel MCP orchestration automatically"
-    echo ""
-    echo "Verification:"
-    echo "  Ask Claude: 'Make 5 MCP calls to list my task lists'"
-    echo "  It should use: mcp-cli call ... & mcp-cli call ... & wait"
+    if [ $failures -eq 0 ]; then
+        print_success "Installation verified! All components OK"
+        echo "============================================"
+        echo ""
+        echo "Next steps:"
+        echo "  1. Ensure ENABLE_EXPERIMENTAL_MCP_CLI=true in your shell profile"
+        echo "  2. Restart Claude Code"
+        echo "  3. Claude will now use parallel MCP orchestration automatically"
+        echo ""
+        echo "Test it:"
+        echo "  Ask Claude: 'Make 5 MCP calls to list my task lists'"
+        echo "  It should use: mcp-cli call ... & mcp-cli call ... & wait"
+    else
+        print_error "Installation incomplete: $failures component(s) failed"
+        echo "============================================"
+        echo ""
+        echo "Please check the errors above and re-run the installer."
+        return 1
+    fi
 }
 
 uninstall_files() {

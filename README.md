@@ -1,122 +1,201 @@
-# Claude Code MCP-CLI Parallel Orchestration
+# Claude Code MCP Parallel Orchestration
 
-> **18x throughput** — 3-minute workflows complete in 10 seconds.
+<div align="center">
+
+**Turn 3-minute MCP workflows into 10-second operations**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.1.12+-blue.svg)](https://claude.ai/claude-code)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg)](#requirements)
 
-**Verified January 2026:**
-- 2 MCP calls: Sequential 7.6s → Parallel 3.8s = **2x faster**
-- 20 MCP calls: Sequential 76s → Parallel 4.9s = **15.5x faster**
-- 50 MCP calls: Sequential 191s → Parallel 10.3s = **18.5x faster**
-- **Always parallelize 2+ calls** — even 2 calls saves 50% time
+| Sequential | Parallel | Speedup |
+|:----------:|:--------:|:-------:|
+| 76 seconds | 4.9 seconds | **15x faster** |
 
----
+*50 MCP calls in 10 seconds instead of 3 minutes*
 
-## The Problem
-
-When Claude Code gathers data from multiple MCP sources, it runs calls **sequentially**. Each call takes ~3.8 seconds, so:
-
-- 20 calls = **76 seconds** of waiting
-- 50 calls = **3+ minutes** of waiting
-
-This toolkit makes Claude Code run `mcp-cli` calls **in parallel**, turning minutes into seconds.
+</div>
 
 ---
 
-## Verified Performance (Full Range)
+## Quick Start
 
-All numbers tested on real MCP servers, January 2026.
+```bash
+# 1. Enable mcp-cli
+echo 'export ENABLE_EXPERIMENTAL_MCP_CLI=true' >> ~/.zshrc && source ~/.zshrc
 
-### Throughput by Configuration
+# 2. Install (requires jq)
+git clone https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode.git
+cd claude-code-mcp-cli-parallel-godmode
+./install.sh --user
 
-| Configuration | Calls | Time | Throughput | vs Sequential |
-|---------------|-------|------|------------|---------------|
-| Sequential (baseline) | 1 | 3.82s | 0.26 calls/s | 1x |
-| **1×2** | 2 | 3.8s | 0.53 calls/s | **2x** |
-| **1×5** | 5 | 2.9s | 1.72 calls/s | **6.6x** |
-| **1×10** | 10 | 3.0s | 3.33 calls/s | **12.8x** |
-| **1×20 (sweet spot)** | 20 | 4.9s | 4.08 calls/s | **15.7x** |
-| **1×30** | 30 | 7.4s | 4.05 calls/s | **15.6x** |
-| **1×40** | 40 | 8.5s | 4.68 calls/s | **18.0x** |
-| **1×50 (extreme)** | 50 | 10.3s | 4.84 calls/s | **18.6x** |
+# 3. Restart Claude Code - done!
+```
 
-### Time Savings
+---
 
-| Workflow Size | Sequential | Parallel | Time Saved | Reduction |
-|---------------|------------|----------|------------|-----------|
-| 2 calls | 7.6s | 3.8s | 3.8s | **50%** |
-| 10 calls | 38.2s | 3.0s | 35.2s | **92%** |
-| 20 calls | 76.4s | 4.9s | 71.5s | **94%** |
-| 30 calls | 114.6s | 7.4s | 107.2s | **94%** |
-| 50 calls | 191s (3m 11s) | 10.3s | 180.7s | **95%** |
+## Why This Exists
 
-### Work Capacity (Fixed Time Windows)
+Claude Code runs MCP calls **sequentially** — each call waits for the previous one to complete.
 
-| Time Window | Sequential | Parallel | Increase |
-|-------------|------------|----------|----------|
-| 10 seconds | 2.6 calls | 48 calls | **18x** |
-| 30 seconds | 7.8 calls | 145 calls | **18x** |
-| 60 seconds | 15.7 calls | 290 calls | **18x** |
-| 5 minutes | 78 calls | 1,452 calls | **18x** |
+```
+Sequential: [call 1: 3.8s] → [call 2: 3.8s] → [call 3: 3.8s] → ... = 76s for 20 calls
+Parallel:   [call 1 ─┬─ call 2 ─┬─ call 3 ─┬─ ...] = 4.9s for 20 calls
+                     └──────────┴──────────┘
+```
 
-### Model Efficiency
+This toolkit teaches Claude Code to run `mcp-cli` calls in parallel using bash background jobs.
 
-| Metric | Sequential (20 calls) | Parallel (1 Bash) | Reduction |
-|--------|----------------------|-------------------|-----------|
+---
+
+## Performance
+
+<details>
+<summary><strong>Verified benchmarks (January 2026)</strong></summary>
+
+### Throughput
+
+| Calls | Sequential | Parallel | Speedup |
+|------:|-----------:|---------:|--------:|
+| 2 | 7.6s | 3.8s | **2x** |
+| 10 | 38s | 3.0s | **12.8x** |
+| 20 | 76s | 4.9s | **15.5x** |
+| 50 | 191s | 10.3s | **18.5x** |
+
+### Efficiency Gains
+
+| Metric | Before | After | Reduction |
+|--------|-------:|------:|----------:|
+| Time (20 calls) | 76s | 4.9s | **94%** |
 | Model turns | 20 | 1 | **95%** |
 | Output tokens | ~1,600 | ~250 | **84%** |
-| API round-trips | 20 | 1 | **95%** |
+
+</details>
 
 ---
 
-## Configuration Guide
+## How It Works
 
-### Choosing the Right Configuration
+The toolkit installs four enforcement layers:
 
-| Your Scenario | Recommended | Expected Speedup | Notes |
-|---------------|-------------|------------------|-------|
-| 1 call | Sequential | — | Single call, no benefit |
-| 2 calls | **1×2** | **2x** | Always parallelize |
-| 3-10 calls | **1×N** | 6-13x | Sweet spot for small batches |
-| 10-20 calls | **1×N** | 13-16x | Optimal efficiency zone |
-| 20-50 calls | **1×N** or **2×N** | 15-18x | Near-maximum throughput |
-| 50+ calls | **Wave batching** | ~18x | Split into 20-25 call waves |
-| Mixed dependencies | **Multi-wave** | 15-18x | Group independent calls |
+```
+┌─────────────────────────────────────────────────────┐
+│  CLAUDE.md          │  Instructions in context      │
+├─────────────────────────────────────────────────────┤
+│  rules/             │  Detailed enforcement rules   │
+├─────────────────────────────────────────────────────┤
+│  mcp-cli-gate.sh    │  Blocks if env var not set    │
+├─────────────────────────────────────────────────────┤
+│  mcp-parallel-      │  Reminds to use parallel      │
+│  reminder.sh        │  pattern for mcp-cli calls    │
+└─────────────────────────────────────────────────────┘
+```
 
-### Configuration Patterns
+Claude Code learns to transform this:
 
-**Pattern 1: Simple Parallel (1×N)**
-Best for: Independent calls, maximum simplicity
 ```bash
-# All calls run simultaneously
-for i in $(seq 1 20); do
-  mcp-cli call server/tool '{}' > /tmp/r$i.json &
-done
+# Before: Sequential (76 seconds)
+mcp-cli call server/tool1 '{}'
+mcp-cli call server/tool2 '{}'
+# ... 18 more calls
+```
+
+Into this:
+
+```bash
+# After: Parallel (4.9 seconds)
+mcp-cli call server/tool1 '{}' > /tmp/r1.json &
+mcp-cli call server/tool2 '{}' > /tmp/r2.json &
+# ... 18 more calls
 wait
 ```
 
-**Pattern 2: Wave Batching (for 50+ calls)**
-Best for: Large batches, avoiding resource exhaustion
-```bash
-# Wave 1: First 25
-for i in $(seq 1 25); do mcp-cli call ... > /tmp/r$i.json & done
-wait
+---
 
-# Wave 2: Next 25
-for i in $(seq 26 50); do mcp-cli call ... > /tmp/r$i.json & done
-wait
+## Installation
+
+### Option A: User-Level (Recommended)
+
+Applies to all your Claude Code projects:
+
+```bash
+./install.sh --user
 ```
 
-**Pattern 3: Dependency Waves**
-Best for: Calls that depend on earlier results
+### Option B: Project-Level
+
+Applies to a single project only:
+
+```bash
+./install.sh --project /path/to/your/project
+```
+
+### What Gets Installed
+
+| File | Purpose |
+|------|---------|
+| `CLAUDE.md` | Instructions loaded into model context |
+| `.claude/rules/mcp-parallel.md` | Detailed enforcement rules |
+| `.claude/hooks/mcp-cli-gate.sh` | Blocks calls if env var missing |
+| `.claude/hooks/mcp-parallel-reminder.sh` | Suggests parallel pattern |
+| `.claude/hooks.json` | Hook configuration |
+
+### Uninstall
+
+```bash
+./install.sh --uninstall --user
+# or
+./install.sh --uninstall --project /path/to/project
+```
+
+---
+
+## Requirements
+
+### Platform Support
+
+| Platform | Status | Notes |
+|----------|:------:|-------|
+| macOS | Supported | Tested on Darwin 25.x |
+| Linux | Supported | Requires bash 4.0+ |
+| Windows | Use WSL2 | Native Windows not supported |
+
+### Dependencies
+
+| Dependency | Install |
+|------------|---------|
+| **jq** | `brew install jq` (macOS) / `apt install jq` (Ubuntu) |
+| **bash 4.0+** | Pre-installed on macOS/Linux |
+| **Claude Code 2.1.12+** | [claude.ai/claude-code](https://claude.ai/claude-code) |
+
+The installer blocks if `jq` is missing.
+
+---
+
+## Usage Patterns
+
+### Basic: Parallel Calls
+
+```bash
+mcp-cli call server/tool1 '{}' > /tmp/r1.json &
+mcp-cli call server/tool2 '{}' > /tmp/r2.json &
+mcp-cli call server/tool3 '{}' > /tmp/r3.json &
+wait
+
+cat /tmp/r1.json /tmp/r2.json /tmp/r3.json
+```
+
+### Advanced: Dependency Waves
+
+When some calls depend on earlier results:
+
 ```bash
 # Wave 1: Independent calls
-mcp-cli call server/get_config '{}' > /tmp/config.json &
 mcp-cli call server/list_items '{}' > /tmp/items.json &
+mcp-cli call server/get_config '{}' > /tmp/config.json &
 wait
 
-# Extract values
+# Extract value from Wave 1
 ITEM_ID=$(jq -r '.items[0].id' /tmp/items.json)
 
 # Wave 2: Dependent calls
@@ -125,293 +204,14 @@ mcp-cli call server/get_history "{\"id\":\"$ITEM_ID\"}" > /tmp/history.json &
 wait
 ```
 
-**Pattern 4: Multi-Bash Parallel**
-Best for: Logical grouping without penalty
-```bash
-# These can be separate Bash tool calls (Layer 2)
-# No performance penalty for splitting into logical groups
-```
-
-### Diminishing Returns
-
-| Range | Behavior | Recommendation |
-|-------|----------|----------------|
-| 1-10 calls | Near-linear speedup | Always parallelize |
-| 10-20 calls | Excellent gains | Sweet spot |
-| 20-40 calls | Good gains, slight plateau | Still worth it |
-| 40-50 calls | Marginal gains | Consider wave batching |
-| 50+ calls | Minimal additional benefit | Use wave batching |
-
-**The ceiling is ~18-19x** — beyond 50 parallel calls, gains are negligible.
-
----
-
-## Three Layers of Parallelization
-
-| Layer | Mechanism | Speedup | Use Case |
-|-------|-----------|---------|----------|
-| **Layer 1** | Background jobs (`&`) in single Bash | Up to 18x | Primary technique |
-| **Layer 2** | Multiple parallel Bash tool calls | Logical grouping | Organize by purpose |
-| **Layer 3** | Parallel Task subagents | Isolated contexts | Complex multi-domain workflows |
-
-**Key insight:** Layers compose without penalty. 4×5 performs similarly to 1×20.
-
-### Layer Composition Examples
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ Layer 3: Parallel Task Subagents                        │
-│ ┌─────────────────────┐ ┌─────────────────────┐        │
-│ │ Task Agent 1        │ │ Task Agent 2        │        │
-│ │ ┌─────────────────┐ │ │ ┌─────────────────┐ │        │
-│ │ │ Layer 2: Bash 1 │ │ │ │ Layer 2: Bash 1 │ │        │
-│ │ │ mcp-cli & ──┐   │ │ │ │ mcp-cli & ──┐   │ │        │
-│ │ │ mcp-cli & ──┼─┐ │ │ │ │ mcp-cli & ──┼─┐ │ │        │
-│ │ │ mcp-cli & ──┼─┤ │ │ │ │ mcp-cli & ──┼─┤ │ │        │
-│ │ │ wait ───────┴─┘ │ │ │ │ wait ───────┴─┘ │ │        │
-│ │ └─────────────────┘ │ │ └─────────────────┘ │        │
-│ └─────────────────────┘ └─────────────────────┘        │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## Real-World Scenarios
-
-### Scenario 1: Daily Briefing (20 data sources)
-
-**Without parallelization:** 76.4 seconds (noticeable wait)
-**With parallelization:** 4.9 seconds (near-instant)
+### Large Batches: Wave Batching (50+ calls)
 
 ```bash
-EMAIL="you@example.com"
-
-# Wave 1: All independent sources (runs in ~5s, not ~76s)
-mcp-cli call google-workspace/get_events "{\"user_google_email\":\"$EMAIL\"}" > /tmp/events.json &
-mcp-cli call google-workspace/search_gmail_messages "{\"user_google_email\":\"$EMAIL\",\"query\":\"in:inbox\"}" > /tmp/emails.json &
-mcp-cli call google-workspace/list_task_lists "{\"user_google_email\":\"$EMAIL\"}" > /tmp/lists.json &
-mcp-cli call google-workspace/list_calendars "{\"user_google_email\":\"$EMAIL\"}" > /tmp/calendars.json &
-mcp-cli call github/list_issues '{"repo":"myorg/repo1"}' > /tmp/issues1.json &
-mcp-cli call github/list_issues '{"repo":"myorg/repo2"}' > /tmp/issues2.json &
-mcp-cli call github/list_commits '{"repo":"myorg/repo1"}' > /tmp/commits.json &
-# ... more sources
-wait
-
-# Wave 2: Dependent calls
-TASK_LIST_ID=$(jq -r '.task_lists[0].id' /tmp/lists.json)
-mcp-cli call google-workspace/list_tasks "{\"user_google_email\":\"$EMAIL\",\"task_list_id\":\"$TASK_LIST_ID\"}" > /tmp/tasks.json &
-wait
-
-# Process all results
-jq -s '.' /tmp/*.json
-```
-
-### Scenario 2: Multi-Repo Status Check (50 calls)
-
-**Without parallelization:** 3+ minutes
-**With parallelization:** ~10 seconds
-
-```bash
-# 50 repository checks in 10 seconds
-REPOS=(repo1 repo2 repo3 ... repo50)
-
-for repo in "${REPOS[@]}"; do
-  mcp-cli call github/list_commits "{\"repo\":\"org/$repo\"}" > /tmp/${repo}_commits.json &
-done
-wait
-
-# Aggregate results
-for repo in "${REPOS[@]}"; do
-  echo "=== $repo ==="
-  jq -r '.commits[0].message' /tmp/${repo}_commits.json
-done
-```
-
-### Scenario 3: Batch Email Processing (30 messages)
-
-**Without parallelization:** 114 seconds
-**With parallelization:** ~7 seconds
-
-```bash
-EMAIL="you@example.com"
-MESSAGE_IDS=$(cat /tmp/message_ids.txt)
-
-for id in $MESSAGE_IDS; do
-  mcp-cli call google-workspace/get_gmail_message_content "{\"user_google_email\":\"$EMAIL\",\"message_id\":\"$id\"}" > /tmp/msg_${id}.json &
-done
-wait
-```
-
----
-
-## Quick Start
-
-### Prerequisites
-
-```bash
-# Enable experimental mcp-cli (required)
-export ENABLE_EXPERIMENTAL_MCP_CLI=true
-
-# Add to shell profile for persistence
-echo 'export ENABLE_EXPERIMENTAL_MCP_CLI=true' >> ~/.zshrc
-```
-
-### Installation
-
-**Option A: User-Level (All Projects)**
-```bash
-git clone https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode.git
-cd claude-code-mcp-cli-parallel-godmode
-./install.sh --user
-```
-
-**Option B: Project-Level (Single Project)**
-```bash
-git clone https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode.git /tmp/mcp-parallel
-/tmp/mcp-parallel/install.sh --project /path/to/your/project
-```
-
-**Option C: Manual**
-```bash
-cp CLAUDE.md ~/.claude/CLAUDE.md
-cp -r .claude/hooks ~/.claude/hooks
-```
-
----
-
-## How It Works
-
-### Why Background Jobs Preserve Session Context
-
-Background jobs (`&`) inherit the parent shell's environment, including Claude Code's session context. The `mcp-cli` command needs access to session endpoint files — background jobs preserve this access.
-
-**What breaks:**
-```bash
-# WRONG: New subshell loses session context
-bash -c 'TMPDIR=$(mktemp -d); mcp-cli call ...'
-# Error: "MCP endpoint file not found"
-```
-
-**What works:**
-```bash
-# CORRECT: Background job inherits session context
-mcp-cli call server/tool '{}' > /tmp/result.json &
-wait
-```
-
----
-
-## Best Practices
-
-### Do's
-
-1. **Always use `wait`** after background jobs to ensure completion
-2. **Redirect output** to temp files (`> /tmp/result.json`) to capture results
-3. **Use `jq`** to extract values between waves for dependent calls
-4. **Group logically** — waves have no performance penalty
-5. **Wave batch 50+ calls** into groups of 20-25
-
-### Don'ts
-
-1. **Don't use `bash -c`** with new temp directories (loses session context)
-2. **Don't exceed 50 parallel calls** without wave batching
-3. **Don't forget dependencies** — some calls need results from earlier calls
-4. **Don't parallelize single calls** — only 1 call, no benefit
-
-### Error Handling
-
-```bash
-# Robust pattern with error checking
-mcp-cli call server/tool '{}' > /tmp/result.json 2>/tmp/error.log &
-PID1=$!
-
-wait $PID1
-if [ $? -ne 0 ]; then
-  echo "Error in call 1: $(cat /tmp/error.log)"
-fi
-```
-
----
-
-## Enforcement Architecture
-
-This toolkit uses **four layers** of enforcement to ensure Claude Code uses parallel MCP orchestration:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Layer 1: CLAUDE.md (Model Context)                          │
-│   Concise instructions loaded into every conversation       │
-│   References rules for detailed enforcement                 │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 2: Rules (.claude/rules/mcp-parallel.md)              │
-│   Detailed enforcement rules auto-loaded by Claude Code     │
-│   FORBIDDEN/REQUIRED patterns with examples                 │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 3: Reminder Hook (mcp-parallel-reminder.sh)           │
-│   Reminds to use parallel pattern for mcp-cli calls         │
-│   Suggests parallel pattern without blocking                │
-├─────────────────────────────────────────────────────────────┤
-│ Layer 4: Guard Hook (mcp-cli-gate.sh)                       │
-│   Blocks mcp-cli if ENABLE_EXPERIMENTAL_MCP_CLI not set     │
-│   Ensures environment is properly configured                │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## What Gets Installed
-
-| File | Purpose | Layer |
-|------|---------|-------|
-| `CLAUDE.md` | Concise instructions (references rules) | Context |
-| `.claude/rules/mcp-parallel.md` | Detailed enforcement rules | Rules |
-| `.claude/hooks/mcp-parallel-reminder.sh` | Reminder: suggests parallel pattern | Hook |
-| `.claude/hooks/mcp-cli-gate.sh` | Guard: blocks if env var not set | Hook |
-| `.claude/hooks.json` | Hook configuration | Config |
-
----
-
-## Troubleshooting
-
-### "MCP endpoint file not found"
-
-Session context lost. Don't use `bash -c` with new temp directories:
-
-```bash
-# WRONG
-bash -c 'TMPDIR=$(mktemp -d); mcp-cli call ...'
-
-# CORRECT
-mcp-cli call ... &
-wait
-```
-
-### "mcp-cli: command not found"
-
-```bash
-export ENABLE_EXPERIMENTAL_MCP_CLI=true
-```
-
-### Results not appearing in temp files
-
-Ensure you're using `wait` after all background jobs:
-
-```bash
-mcp-cli call ... > /tmp/r1.json &
-mcp-cli call ... > /tmp/r2.json &
-wait  # Critical! Don't forget this
-cat /tmp/r1.json
-```
-
-### High memory usage with 50+ calls
-
-Use wave batching to limit concurrent processes:
-
-```bash
-# Process in waves of 20
+# Process in waves of 20-25 to avoid resource exhaustion
 for wave in 1 2 3; do
   start=$((($wave - 1) * 20 + 1))
-  end=$(($wave * 20))
-  for i in $(seq $start $end); do
-    mcp-cli call ... > /tmp/r$i.json &
+  for i in $(seq $start $(($start + 19))); do
+    mcp-cli call server/tool '{}' > /tmp/r$i.json &
   done
   wait
 done
@@ -419,54 +219,85 @@ done
 
 ---
 
-## Comparison with Anthropic's Approach
+## Real-World Example
 
-| Aspect | Anthropic's Approach | This Toolkit |
-|--------|---------------------|--------------|
-| **Primary goal** | Token efficiency | Throughput/latency |
-| **Token savings** | 98.7% (on-demand loading) | 84% (fewer turns) |
-| **Time savings** | N/A (token focus) | **95% (18x faster)** |
-| **Execution model** | Filesystem code files | Inline bash commands |
-| **Best for** | Context window limits | Speed-critical workflows |
+### Daily Briefing (20 sources in 5 seconds)
 
-**When to use what:**
-- **This toolkit**: When speed matters — daily briefings, multi-source queries, batch operations
-- **Anthropic's approach**: When token costs matter — large result sets, context window optimization
+```bash
+EMAIL="you@example.com"
 
-They're complementary — you can use both.
+# All sources in parallel
+mcp-cli call google-workspace/get_events "{\"user_google_email\":\"$EMAIL\"}" > /tmp/events.json &
+mcp-cli call google-workspace/search_gmail_messages "{\"user_google_email\":\"$EMAIL\",\"query\":\"is:unread\"}" > /tmp/emails.json &
+mcp-cli call google-workspace/list_task_lists "{\"user_google_email\":\"$EMAIL\"}" > /tmp/tasks.json &
+mcp-cli call github/list_issues '{"repo":"myorg/repo1"}' > /tmp/issues.json &
+mcp-cli call github/list_pull_requests '{"repo":"myorg/repo1"}' > /tmp/prs.json &
+wait
+
+# Process results
+jq -s '.' /tmp/*.json
+```
 
 ---
 
-## Reproduce Benchmarks
+## Troubleshooting
+
+<details>
+<summary><strong>"MCP endpoint file not found"</strong></summary>
+
+Session context lost. Don't use `bash -c` with new directories:
+
+```bash
+# Wrong
+bash -c 'TMPDIR=$(mktemp -d); mcp-cli call ...'
+
+# Correct
+mcp-cli call ... > /tmp/result.json &
+wait
+```
+
+</details>
+
+<details>
+<summary><strong>"mcp-cli: command not found"</strong></summary>
 
 ```bash
 export ENABLE_EXPERIMENTAL_MCP_CLI=true
-./benchmarks/run-benchmark.sh your@email.com
+# Add to ~/.zshrc or ~/.bashrc for persistence
 ```
 
----
+</details>
 
-## Summary: What You Get
+<details>
+<summary><strong>Results not in temp files</strong></summary>
 
-| Metric | Improvement | Verified |
-|--------|-------------|----------|
-| **Throughput** | 18.6x increase | Yes |
-| **Time (20 calls)** | 76s → 4.9s (94% faster) | Yes |
-| **Time (50 calls)** | 191s → 10.3s (95% faster) | Yes |
-| **Model turns** | 95% reduction | Yes |
-| **Output tokens** | 84% reduction | Yes |
-| **Work capacity** | 18x more calls/minute | Yes |
-
-**Bottom line:** Complete 290 MCP calls in the time it takes to do 16 sequentially.
-
----
-
-## Uninstallation
+Always use `wait` after background jobs:
 
 ```bash
-./install.sh --uninstall --user        # User-level
-./install.sh --uninstall --project /p  # Project-level
+mcp-cli call ... > /tmp/r1.json &
+mcp-cli call ... > /tmp/r2.json &
+wait  # Don't forget this!
 ```
+
+</details>
+
+<details>
+<summary><strong>High memory with 50+ calls</strong></summary>
+
+Use wave batching — see [Large Batches](#large-batches-wave-batching-50-calls) above.
+
+</details>
+
+---
+
+## Best Practices
+
+| Do | Don't |
+|----|-------|
+| Always use `wait` after `&` jobs | Forget `wait` before reading results |
+| Redirect output to temp files | Let output go to stdout |
+| Wave batch 50+ calls | Run 100 calls simultaneously |
+| Use `jq` between waves for dependencies | Guess at dependent values |
 
 ---
 
@@ -474,20 +305,16 @@ export ENABLE_EXPERIMENTAL_MCP_CLI=true
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
-
 ## License
 
 MIT License. See [LICENSE](LICENSE).
 
 ---
 
-## Related
+<div align="center">
 
-- [Anthropic: Code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp) — Token efficiency through code execution
-- [Claude Code](https://claude.ai/claude-code) — Anthropic's CLI
-- [Model Context Protocol](https://modelcontextprotocol.io/) — MCP specification
+**[Report Bug](https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode/issues)** · **[Request Feature](https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode/issues)**
 
----
+*Created by [AIntelligent Technologies](https://aintelligenttech.com) · January 2026*
 
-*Created by [AIntelligent Technologies](https://aintelligenttech.com) — January 2026*
+</div>

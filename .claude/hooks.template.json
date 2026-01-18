@@ -1,5 +1,5 @@
 {
-  "description": "MCP Parallel Orchestration hooks - warns/enforces parallel MCP call patterns",
+  "description": "MCP Parallel Orchestration hooks",
   "hooks": {
     "PreToolUse": [
       {
@@ -7,12 +7,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/mcp-cli-gate.sh",
+            "command": "{{HOOKS_PATH}}/mcp-cli-gate.sh",
             "timeout": 5
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/mcp-parallel-reminder.sh",
+            "command": "{{HOOKS_PATH}}/mcp-parallel-reminder.sh",
             "timeout": 5
           }
         ]
