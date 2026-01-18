@@ -329,14 +329,39 @@ fi
 
 ---
 
+## Enforcement Architecture
+
+This toolkit uses **four layers** of enforcement to ensure Claude Code uses parallel MCP orchestration:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Layer 1: CLAUDE.md (Model Context)                          │
+│   Concise instructions loaded into every conversation       │
+│   References rules for detailed enforcement                 │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 2: Rules (.claude/rules/mcp-parallel.md)              │
+│   Detailed enforcement rules auto-loaded by Claude Code     │
+│   FORBIDDEN/REQUIRED patterns with examples                 │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 3: Advisory Hook (mcp-parallel-validator.sh)          │
+│   Runtime warning when sequential mcp-cli calls detected    │
+│   Suggests parallel pattern without blocking                │
+├─────────────────────────────────────────────────────────────┤
+│ Layer 4: Guard Hook (mcp-cli-gate.sh)                       │
+│   Blocks mcp-cli if ENABLE_EXPERIMENTAL_MCP_CLI not set     │
+│   Ensures environment is properly configured                │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ## What Gets Installed
 
-| File | Purpose |
-|------|---------|
-| `CLAUDE.md` | Instructions for parallel MCP orchestration |
-| `.claude/hooks/mcp-parallel-validator.sh` | Advisory: warns on sequential calls |
-| `.claude/hooks/mcp-cli-gate.sh` | Optional: blocks if env var not set |
-| `.claude/hooks.json` | Hook configuration |
+| File | Purpose | Layer |
+|------|---------|-------|
+| `CLAUDE.md` | Concise instructions (references rules) | Context |
+| `.claude/rules/mcp-parallel.md` | Detailed enforcement rules | Rules |
+| `.claude/hooks/mcp-parallel-validator.sh` | Advisory: warns on sequential calls | Hook |
+| `.claude/hooks/mcp-cli-gate.sh` | Guard: blocks if env var not set | Hook |
+| `.claude/hooks.json` | Hook configuration | Config |
 
 ---
 

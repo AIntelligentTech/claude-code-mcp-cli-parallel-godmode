@@ -1,6 +1,6 @@
 #!/bin/bash
 # MCP Parallel Orchestration Installer
-# Installs CLAUDE.md and hooks for parallel MCP call optimization
+# Installs CLAUDE.md, rules, and hooks for parallel MCP call optimization
 #
 # Usage:
 #   ./install.sh --user              # Install to ~/.claude (all projects)
@@ -11,17 +11,19 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION="1.0.0"
+VERSION="2.0.0"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
 print_warning() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 
 show_help() {
     cat << EOF
@@ -40,6 +42,11 @@ Options:
   --uninstall     Remove installation instead of installing
   --strict        Enable strict mode (blocks mcp-cli without env var)
   --help          Show this help message
+
+What Gets Installed:
+  - CLAUDE.md      Concise instructions (references rules)
+  - rules/         Detailed enforcement rules
+  - hooks/         Pre-tool validation hooks
 
 Prerequisites:
   Add to your shell profile (~/.zshrc or ~/.bashrc):
@@ -73,20 +80,33 @@ install_files() {
     local is_user_level="$2"
     local strict_mode="$3"
 
-    echo "Installing to: $target_dir"
+    echo "Installing MCP Parallel Orchestration to: $target_dir"
+    echo ""
+    print_info "Enforcement layers:"
+    echo "  1. CLAUDE.md    - Instructions in model context"
+    echo "  2. rules/       - Detailed enforcement rules"
+    echo "  3. hooks/       - Runtime validation hooks"
     echo ""
 
     # Create directories
     mkdir -p "$target_dir/hooks"
+    mkdir -p "$target_dir/rules"
 
-    # Copy CLAUDE.md
+    # ============================================
+    # Install Rules
+    # ============================================
+    cp "$SCRIPT_DIR/.claude/rules/mcp-parallel.md" "$target_dir/rules/"
+    print_success "Installed rules/mcp-parallel.md (enforcement rules)"
+
+    # ============================================
+    # Install CLAUDE.md
+    # ============================================
     if [ -f "$target_dir/CLAUDE.md" ]; then
-        print_warning "CLAUDE.md already exists, appending MCP section..."
-
         # Check if already installed
         if grep -q "MCP Parallel Orchestration" "$target_dir/CLAUDE.md" 2>/dev/null; then
             print_warning "MCP Parallel Orchestration already in CLAUDE.md, skipping..."
         else
+            print_warning "CLAUDE.md already exists, appending MCP section..."
             echo "" >> "$target_dir/CLAUDE.md"
             echo "---" >> "$target_dir/CLAUDE.md"
             echo "" >> "$target_dir/CLAUDE.md"
@@ -95,19 +115,23 @@ install_files() {
         fi
     else
         cp "$SCRIPT_DIR/CLAUDE.md" "$target_dir/CLAUDE.md"
-        print_success "Created CLAUDE.md"
+        print_success "Created CLAUDE.md (concise instructions)"
     fi
 
-    # Copy hooks
+    # ============================================
+    # Install Hooks
+    # ============================================
     cp "$SCRIPT_DIR/.claude/hooks/mcp-parallel-validator.sh" "$target_dir/hooks/"
     chmod +x "$target_dir/hooks/mcp-parallel-validator.sh"
-    print_success "Installed mcp-parallel-validator.sh"
+    print_success "Installed hooks/mcp-parallel-validator.sh (advisory)"
 
     cp "$SCRIPT_DIR/.claude/hooks/mcp-cli-gate.sh" "$target_dir/hooks/"
     chmod +x "$target_dir/hooks/mcp-cli-gate.sh"
-    print_success "Installed mcp-cli-gate.sh"
+    print_success "Installed hooks/mcp-cli-gate.sh (env guard)"
 
-    # Handle hooks.json
+    # ============================================
+    # Install hooks.json
+    # ============================================
     local hooks_file="$target_dir/hooks.json"
     if [ "$is_user_level" = "true" ]; then
         hooks_file="$target_dir/hooks/hooks.json"
@@ -153,7 +177,7 @@ EOF
         else
             cp "$SCRIPT_DIR/.claude/hooks.json" "$target_dir/hooks.json"
         fi
-        print_success "Created hooks.json"
+        print_success "Created hooks.json (hook configuration)"
     fi
 
     # Add gate hook if strict mode
@@ -163,30 +187,47 @@ EOF
     fi
 
     echo ""
+    echo "============================================"
     print_success "Installation complete!"
+    echo "============================================"
+    echo ""
+    echo "Installed components:"
+    echo "  - CLAUDE.md              Instructions (in model context)"
+    echo "  - rules/mcp-parallel.md  Enforcement rules (auto-loaded)"
+    echo "  - hooks/                 Runtime validation"
     echo ""
     echo "Next steps:"
     echo "  1. Ensure ENABLE_EXPERIMENTAL_MCP_CLI=true in your shell profile"
     echo "  2. Restart Claude Code"
     echo "  3. Claude will now use parallel MCP orchestration automatically"
+    echo ""
+    echo "Verification:"
+    echo "  Ask Claude: 'Make 5 MCP calls to list my task lists'"
+    echo "  It should use: mcp-cli call ... & mcp-cli call ... & wait"
 }
 
 uninstall_files() {
     local target_dir="$1"
     local is_user_level="$2"
 
-    echo "Uninstalling from: $target_dir"
+    echo "Uninstalling MCP Parallel Orchestration from: $target_dir"
     echo ""
+
+    # Remove rules
+    if [ -f "$target_dir/rules/mcp-parallel.md" ]; then
+        rm "$target_dir/rules/mcp-parallel.md"
+        print_success "Removed rules/mcp-parallel.md"
+    fi
 
     # Remove hooks
     if [ -f "$target_dir/hooks/mcp-parallel-validator.sh" ]; then
         rm "$target_dir/hooks/mcp-parallel-validator.sh"
-        print_success "Removed mcp-parallel-validator.sh"
+        print_success "Removed hooks/mcp-parallel-validator.sh"
     fi
 
     if [ -f "$target_dir/hooks/mcp-cli-gate.sh" ]; then
         rm "$target_dir/hooks/mcp-cli-gate.sh"
-        print_success "Removed mcp-cli-gate.sh"
+        print_success "Removed hooks/mcp-cli-gate.sh"
     fi
 
     # Note about CLAUDE.md
@@ -198,6 +239,9 @@ uninstall_files() {
     # Note about hooks.json
     print_warning "hooks.json not modified (may contain other hooks)"
     echo "  Manually remove MCP-related hooks if desired"
+
+    # Clean up empty directories
+    rmdir "$target_dir/rules" 2>/dev/null && print_success "Removed empty rules/ directory" || true
 
     echo ""
     print_success "Uninstallation complete!"
