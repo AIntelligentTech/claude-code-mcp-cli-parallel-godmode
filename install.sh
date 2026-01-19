@@ -40,6 +40,7 @@ Options:
   --user          Install/uninstall at user level (~/.claude)
   --project PATH  Install/uninstall at project level (PATH/.claude)
   --uninstall     Remove installation instead of installing
+  --force         Force reinstall (replaces existing installer files)
   --strict        Enable strict mode (blocks mcp-cli without env var)
   --help          Show this help message
 
@@ -55,6 +56,7 @@ Prerequisites:
 Examples:
   ./install.sh --user
   ./install.sh --project ~/my-project
+  ./install.sh --user --force                  # Force reinstall at user level
   ./install.sh --uninstall --user
 
 EOF
@@ -143,8 +145,12 @@ install_files() {
     local target_dir="$1"
     local is_user_level="$2"
     local strict_mode="$3"
+    local force_mode="$4"
 
     echo "Installing MCP Parallel Orchestration to: $target_dir"
+    if [ "$force_mode" = "true" ]; then
+        echo "(Force mode: will replace existing installer files)"
+    fi
     echo ""
     print_info "Enforcement layers:"
     echo "  1. CLAUDE.md    - Instructions in model context"
@@ -168,7 +174,21 @@ install_files() {
     if [ -f "$target_dir/CLAUDE.md" ]; then
         # Check if already installed
         if grep -q "MCP Parallel Orchestration" "$target_dir/CLAUDE.md" 2>/dev/null; then
-            print_warning "MCP Parallel Orchestration already in CLAUDE.md, skipping..."
+            if [ "$force_mode" = "true" ]; then
+                print_info "Force mode: replacing MCP section in CLAUDE.md..."
+                # Remove old MCP section and add fresh one
+                # Extract everything before the MCP section
+                awk '/^# MCP Parallel Orchestration$/,/^---$/{next} /^\*Installed by \[claude-code-mcp-cli-parallel-godmode\]/{next} 1' "$target_dir/CLAUDE.md" | sed '/^$/N;/^\n$/D' > "$target_dir/CLAUDE.md.tmp"
+                # Append fresh MCP section
+                echo "" >> "$target_dir/CLAUDE.md.tmp"
+                echo "---" >> "$target_dir/CLAUDE.md.tmp"
+                echo "" >> "$target_dir/CLAUDE.md.tmp"
+                cat "$SCRIPT_DIR/CLAUDE.md" >> "$target_dir/CLAUDE.md.tmp"
+                mv "$target_dir/CLAUDE.md.tmp" "$target_dir/CLAUDE.md"
+                print_success "Replaced MCP section in CLAUDE.md"
+            else
+                print_warning "MCP Parallel Orchestration already in CLAUDE.md, skipping..."
+            fi
         else
             print_warning "CLAUDE.md already exists, appending MCP section..."
             echo "" >> "$target_dir/CLAUDE.md"
@@ -221,7 +241,27 @@ install_files() {
         if grep -q "mcp-parallel-reminder.sh" "$hooks_file" 2>/dev/null; then
             # Check if gate is also present
             if grep -q "mcp-cli-gate.sh" "$hooks_file" 2>/dev/null; then
-                print_warning "MCP hooks already installed in hooks.json, skipping..."
+                if [ "$force_mode" = "true" ]; then
+                    print_info "Force mode: replacing MCP hooks in hooks.json..."
+                    # Remove old MCP hooks and add fresh ones
+                    jq '.hooks.PreToolUse |= map(
+                        if .matcher == "Bash" then
+                            .hooks |= map(select(.command | contains("mcp-cli-gate.sh") | not) | select(.command | contains("mcp-parallel-reminder.sh") | not))
+                        else . end
+                    )' "$hooks_file" > "$hooks_file.tmp" && mv "$hooks_file.tmp" "$hooks_file"
+
+                    # Now add fresh hooks
+                    local our_hook_entries
+                    our_hook_entries=$(echo "$our_hooks" | jq '.hooks.PreToolUse[0].hooks')
+                    jq --argjson newhooks "$our_hook_entries" '
+                        .hooks.PreToolUse |= map(
+                            if .matcher == "Bash" then .hooks = $newhooks + .hooks else . end
+                        )
+                    ' "$hooks_file" > "$hooks_file.tmp" && mv "$hooks_file.tmp" "$hooks_file"
+                    print_success "Replaced MCP hooks in hooks.json"
+                else
+                    print_warning "MCP hooks already installed in hooks.json, skipping..."
+                fi
             else
                 # Reminder exists but gate doesn't - need to add gate
                 print_info "Adding mcp-cli-gate.sh to existing hooks..."
@@ -409,6 +449,7 @@ INSTALL_MODE=""
 TARGET_PATH=""
 UNINSTALL=false
 STRICT_MODE=false
+FORCE_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -424,6 +465,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --uninstall)
             UNINSTALL=true
+            shift
+            ;;
+        --force)
+            FORCE_MODE=true
             shift
             ;;
         --strict)
@@ -457,5 +502,5 @@ check_prerequisites
 if [ "$UNINSTALL" = true ]; then
     uninstall_files "$TARGET_PATH" "$([ "$INSTALL_MODE" = "user" ] && echo "true" || echo "false")"
 else
-    install_files "$TARGET_PATH" "$([ "$INSTALL_MODE" = "user" ] && echo "true" || echo "false")" "$STRICT_MODE"
+    install_files "$TARGET_PATH" "$([ "$INSTALL_MODE" = "user" ] && echo "true" || echo "false")" "$([ "$STRICT_MODE" = true ] && echo "true" || echo "false")" "$([ "$FORCE_MODE" = true ] && echo "true" || echo "false")"
 fi
