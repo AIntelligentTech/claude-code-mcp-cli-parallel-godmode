@@ -3,7 +3,7 @@
 # Blocks mcp-cli usage if ENABLE_EXPERIMENTAL_MCP_CLI is not set
 #
 # Part of claude-code-mcp-cli-parallel-godmode
-# https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode
+# https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode
 
 # Read tool input from stdin
 INPUT=$(cat)

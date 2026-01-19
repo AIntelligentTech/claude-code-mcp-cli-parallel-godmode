@@ -60,4 +60,4 @@ export ENABLE_EXPERIMENTAL_MCP_CLI=true
 
 ---
 
-*Installed by [claude-code-mcp-cli-parallel-godmode](https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode)*
+*Installed by [claude-code-mcp-cli-parallel-godmode](https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode)*

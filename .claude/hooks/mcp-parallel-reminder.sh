@@ -4,7 +4,7 @@
 # Triggers on BOTH mcp-cli info AND mcp-cli call
 #
 # Part of claude-code-mcp-cli-parallel-godmode
-# https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode
+# https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode
 
 # Read tool input from stdin
 INPUT=$(cat)

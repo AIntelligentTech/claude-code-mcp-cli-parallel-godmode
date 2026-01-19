@@ -5,7 +5,7 @@
 
 set -e
 
-REPO="https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode.git"
+REPO="https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode.git"
 
 # Parse args (passed via bash -s -- args)
 INSTALL_ARGS="${*:---user}"

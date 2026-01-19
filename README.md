@@ -22,12 +22,12 @@
 
 **Install (all projects):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash
+curl -fsSL https://raw.githubusercontent.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash
 ```
 
 **Install (current project only):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash -s -- --project .
+curl -fsSL https://raw.githubusercontent.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash -s -- --project .
 ```
 
 Then restart Claude Code.
@@ -46,7 +46,7 @@ Then restart Claude Code.
 <summary>Manual install</summary>
 
 ```bash
-git clone --depth 1 https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode.git /tmp/mcp-parallel
+git clone --depth 1 https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode.git /tmp/mcp-parallel
 /tmp/mcp-parallel/install.sh --user
 rm -rf /tmp/mcp-parallel
 ```
@@ -490,7 +490,7 @@ MIT License. See [LICENSE](LICENSE).
 
 <div align="center">
 
-**[Report Bug](https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode/issues)** · **[Request Feature](https://github.com/yourusername/claude-code-mcp-cli-parallel-godmode/issues)**
+**[Report Bug](https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/issues)** · **[Request Feature](https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/issues)**
 
 *Created by [AIntelligent Technologies](https://aintelligenttech.com) · January 2026*
 
