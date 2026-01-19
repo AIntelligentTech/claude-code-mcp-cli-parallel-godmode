@@ -57,21 +57,21 @@ rm -rf /tmp/mcp-parallel
 
 ## Why This Exists
 
-Claude Code runs MCP calls **sequentially** by default — each call waits for the previous one to complete:
+Claude Code runs MCP operations **sequentially** by default — each operation waits for the previous one to complete:
 
 ```
-Default:  [call 1: 3.8s] → [call 2: 3.8s] → [call 3: 3.8s] → ... = 76s for 20 calls
+Default:  [op 1: 3.8s] → [op 2: 3.8s] → [op 3: 3.8s] → ... = 76s for 20 operations
 ```
 
 This toolkit enables **two levels of parallelization**:
 
-### Level 1: Parallel calls within a single Bash invocation
+### Level 1: Parallel operations within a single Bash invocation
 
-Using background jobs (`&`) and `wait`, multiple MCP calls run simultaneously:
+Using background jobs (`&`) and `wait`, multiple MCP operations run simultaneously:
 
 ```
-Single Bash call:  [call 1 ─┬─ call 2 ─┬─ call 3 ─┬─ ...] = 4.9s for 20 calls
-                            └──────────┴──────────┘
+Single Bash call:  [op 1 ─┬─ op 2 ─┬─ op 3 ─┬─ ...] = 4.9s for 20 operations
+                          └────────┴────────┘
 ```
 
 ### Level 2: Multiple parallel Bash tool calls
@@ -88,6 +88,26 @@ Claude Code can invoke multiple Bash tools simultaneously. Combined with Level 1
 
 ---
 
+## Key Principle: ALL MCP Operations
+
+This applies to **both** `mcp-cli info` (schema checks) **and** `mcp-cli call` (tool invocations).
+
+```bash
+# REQUIRED - parallelize EVERYTHING
+mcp-cli info server/tool1 > /tmp/i1.json &
+mcp-cli info server/tool2 > /tmp/i2.json &
+wait
+mcp-cli call server/tool1 '{}' > /tmp/r1.json &
+mcp-cli call server/tool2 '{}' > /tmp/r2.json &
+wait
+
+# FORBIDDEN - sequential info checks waste time too
+mcp-cli info server/tool1
+mcp-cli info server/tool2
+```
+
+---
+
 ## Performance
 
 <details>
@@ -95,12 +115,13 @@ Claude Code can invoke multiple Bash tools simultaneously. Combined with Level 1
 
 ### Throughput
 
-| Calls | Sequential | Parallel | Speedup |
-|------:|-----------:|---------:|--------:|
+| Operations | Sequential | Parallel | Speedup |
+|-----------:|-----------:|---------:|--------:|
 | 2 | 7.6s | 3.8s | **2x** |
 | 10 | 38s | 3.0s | **12.8x** |
 | 20 | 76s | 4.9s | **15.5x** |
 | 50 | 191s | 10.3s | **18.5x** |
+| 100 | 382s | ~15s | **~25x** |
 
 ### Efficiency Gains
 
@@ -127,7 +148,7 @@ The toolkit installs four enforcement layers:
 │  mcp-cli-gate.sh    │  Blocks if env var not set    │
 ├─────────────────────────────────────────────────────┤
 │  mcp-parallel-      │  Reminds to use parallel      │
-│  reminder.sh        │  pattern for mcp-cli calls    │
+│  reminder.sh        │  pattern for ALL mcp-cli ops  │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -135,18 +156,23 @@ Claude Code learns to transform this:
 
 ```bash
 # Before: Sequential (76 seconds)
+mcp-cli info server/tool1
+mcp-cli info server/tool2
 mcp-cli call server/tool1 '{}'
 mcp-cli call server/tool2 '{}'
-# ... 18 more calls
+# ... 16 more operations
 ```
 
 Into this:
 
 ```bash
 # After: Parallel (4.9 seconds)
+mcp-cli info server/tool1 > /tmp/i1.json &
+mcp-cli info server/tool2 > /tmp/i2.json &
+wait
 mcp-cli call server/tool1 '{}' > /tmp/r1.json &
 mcp-cli call server/tool2 '{}' > /tmp/r2.json &
-# ... 18 more calls
+# ... 16 more operations
 wait
 ```
 
@@ -213,10 +239,15 @@ The installer blocks if `jq` is missing.
 
 ## Usage Patterns
 
-### Basic: Parallel Calls
+### Basic: Parallel Operations
 
 ```bash
-# Run 3 calls in parallel, wait for all to complete
+# Run 3 info checks + 3 calls in parallel
+mcp-cli info server/tool1 > /tmp/i1.json &
+mcp-cli info server/tool2 > /tmp/i2.json &
+mcp-cli info server/tool3 > /tmp/i3.json &
+wait
+
 mcp-cli call server/tool1 '{}' > /tmp/r1.json &
 mcp-cli call server/tool2 '{}' > /tmp/r2.json &
 mcp-cli call server/tool3 '{}' > /tmp/r3.json &
@@ -226,12 +257,33 @@ wait
 jq -s '.' /tmp/r1.json /tmp/r2.json /tmp/r3.json
 ```
 
+### Optimal Batching (20-25 operations per wave)
+
+```bash
+# Batch independent operations in one Bash call (target 20-25)
+# Schema checks
+mcp-cli info google-workspace/get_events > /tmp/i1.json &
+mcp-cli info google-workspace/search_gmail_messages > /tmp/i2.json &
+mcp-cli info google-workspace/list_task_lists > /tmp/i3.json &
+mcp-cli info github/list_issues > /tmp/i4.json &
+mcp-cli info github/list_pull_requests > /tmp/i5.json &
+# ... up to 20-25 total
+wait
+
+# Tool calls
+mcp-cli call google-workspace/get_events '{"cal":"cal1"}' > /tmp/r1.json &
+mcp-cli call google-workspace/get_events '{"cal":"cal2"}' > /tmp/r2.json &
+# ... up to 20-25 total
+wait
+```
+
 ### Dependency Waves
 
 When calls depend on earlier results, use waves:
 
 ```bash
-# Wave 1: Independent calls run in parallel
+# Wave 1: Independent operations run in parallel
+mcp-cli info server/list_items > /tmp/schema.json &
 mcp-cli call server/list_items '{}' > /tmp/items.json &
 mcp-cli call server/get_config '{}' > /tmp/config.json &
 wait
@@ -245,14 +297,14 @@ mcp-cli call server/get_history "{\"id\":\"$ITEM_ID\"}" > /tmp/history.json &
 wait
 ```
 
-### Large Batches (50+ calls)
+### Large Batches (100+ operations)
 
-Batch into waves of 20-25 to avoid resource exhaustion:
+Batch into waves of 50-75 to balance throughput and resource usage:
 
 ```bash
-# Process 60 items in 3 waves
-ITEMS=$(seq 1 60)
-BATCH_SIZE=20
+# Process 150 items in 3 waves
+ITEMS=$(seq 1 150)
+BATCH_SIZE=50
 
 for item in $ITEMS; do
   mcp-cli call server/process "{\"id\":$item}" > "/tmp/r${item}.json" &
@@ -262,34 +314,90 @@ done
 wait  # Final batch
 ```
 
-### With Error Handling
+### Level 2: Multiple Parallel Bash Calls
+
+Invoke multiple Bash tools simultaneously for multiplicative effect:
 
 ```bash
-# Capture stdout and stderr separately
-mcp-cli call server/tool '{}' > /tmp/result.json 2> /tmp/error.log &
-pid=$!
-wait $pid || echo "Call failed: $(cat /tmp/error.log)"
+# Bash call 1 (parallel with Bash call 2)
+mcp-cli call google-workspace/get_events '{"cal":"cal1"}' > /tmp/cal1.json &
+mcp-cli call google-workspace/get_events '{"cal":"cal2"}' > /tmp/cal2.json &
+# ... 23 more calendar calls
+wait
+```
+
+```bash
+# Bash call 2 (parallel with Bash call 1)
+mcp-cli call github/list_issues '{"repo":"repo1"}' > /tmp/gh1.json &
+mcp-cli call github/list_issues '{"repo":"repo2"}' > /tmp/gh2.json &
+# ... 23 more GitHub calls
+wait
+```
+
+**Result:** 50 operations complete in ~5 seconds using two parallel Bash calls.
+
+---
+
+## Subagent Best Practices
+
+When spawning subagents that will make MCP calls:
+
+### Pre-batch Schemas in Parent Session
+
+```bash
+# Parent session: gather all schemas before spawning subagents
+mcp-cli info google-workspace/get_events > /tmp/schema_events.json &
+mcp-cli info google-workspace/search_gmail_messages > /tmp/schema_gmail.json &
+mcp-cli info google-workspace/list_tasks > /tmp/schema_tasks.json &
+wait
+
+# Pass schemas to subagent via prompt
+SCHEMAS=$(cat /tmp/schema_*.json | jq -s '.')
+```
+
+### Avoid Context Thrashing
+
+| Do | Don't |
+|----|-------|
+| Batch work into fewer subagents | Spawn many small subagents |
+| Pre-fetch data in parent session | Make redundant MCP calls across agents |
+| Use haiku for exploration tasks | Use opus/sonnet for simple data gathering |
+| Give each subagent substantial work | Create one subagent per MCP call |
+
+### Include Parallelization in Subagent Prompts
+
+When spawning subagents, explicitly include:
+
+```
+IMPORTANT: Use parallel MCP orchestration. Batch all mcp-cli operations:
+mcp-cli info/call ... > /tmp/r1.json &
+mcp-cli info/call ... > /tmp/r2.json &
+wait
 ```
 
 ---
 
 ## Real-World Example
 
-### Daily Briefing (20 sources in 5 seconds)
+### Daily Briefing (31 sources in 5 seconds)
 
 ```bash
 EMAIL="you@example.com"
 
-# All sources in parallel
-mcp-cli call google-workspace/get_events "{\"user_google_email\":\"$EMAIL\"}" > /tmp/events.json &
+# Wave 1: All schemas + initial data in parallel (one Bash call)
+mcp-cli info google-workspace/get_events > /tmp/i1.json &
+mcp-cli info google-workspace/search_gmail_messages > /tmp/i2.json &
+mcp-cli info google-workspace/list_task_lists > /tmp/i3.json &
+mcp-cli call google-workspace/get_events "{\"user_google_email\":\"$EMAIL\",\"calendar_id\":\"cal1\"}" > /tmp/cal1.json &
+mcp-cli call google-workspace/get_events "{\"user_google_email\":\"$EMAIL\",\"calendar_id\":\"cal2\"}" > /tmp/cal2.json &
+# ... 9 calendars total
 mcp-cli call google-workspace/search_gmail_messages "{\"user_google_email\":\"$EMAIL\",\"query\":\"is:unread\"}" > /tmp/emails.json &
 mcp-cli call google-workspace/list_task_lists "{\"user_google_email\":\"$EMAIL\"}" > /tmp/tasks.json &
 mcp-cli call github/list_issues '{"repo":"myorg/repo1"}' > /tmp/issues.json &
 mcp-cli call github/list_pull_requests '{"repo":"myorg/repo1"}' > /tmp/prs.json &
 wait
 
-# Process results
-jq -s '.' /tmp/*.json
+# Total: 31 MCP operations in ~5 seconds instead of ~2 minutes
 ```
 
 ---
@@ -336,22 +444,37 @@ wait  # Don't forget this!
 </details>
 
 <details>
-<summary><strong>High memory with 50+ calls</strong></summary>
+<summary><strong>High memory with 100+ operations</strong></summary>
 
-Use wave batching — see [Large Batches](#large-batches-wave-batching-50-calls) above.
+Use wave batching — batch into groups of 50-75:
+
+```bash
+for wave in 1 2; do
+  # 50 operations per wave
+  for i in $(seq 1 50); do
+    mcp-cli call ... > /tmp/r$i.json &
+  done
+  wait
+done
+```
 
 </details>
 
 ---
 
-## Best Practices
+## Best Practices Summary
 
 | Do | Don't |
 |----|-------|
+| Parallelize `mcp-cli info` AND `mcp-cli call` | Only parallelize calls, not info checks |
+| Batch 20-25 operations per Bash call | Make many small Bash calls |
+| Use Level 2 (multiple parallel Bash calls) | Rely only on Level 1 |
+| Pre-fetch schemas for subagents | Let each subagent fetch its own schemas |
+| Use waves for dependencies | Guess at dependent values |
 | Always use `wait` after `&` jobs | Forget `wait` before reading results |
 | Redirect output to temp files | Let output go to stdout |
-| Wave batch 50+ calls | Run 100 calls simultaneously |
-| Use `jq` between waves for dependencies | Guess at dependent values |
+| Wave batch 100+ operations | Run 200 operations simultaneously |
+| Give subagents substantial work batches | Spawn many small subagents |
 
 ---
 

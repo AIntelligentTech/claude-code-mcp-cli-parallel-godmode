@@ -1,6 +1,8 @@
 # MCP Parallel Orchestration
 
-**MANDATORY: Use parallel orchestration for all mcp-cli operations (2+ calls).**
+**MANDATORY: Use parallel orchestration for ALL mcp-cli operations (2+ calls).**
+
+This applies to **both** `mcp-cli info` and `mcp-cli call` commands.
 
 See `.claude/rules/mcp-parallel.md` for complete enforcement rules.
 
@@ -8,22 +10,38 @@ See `.claude/rules/mcp-parallel.md` for complete enforcement rules.
 
 ```bash
 # REQUIRED pattern - parallel execution (even for just 2 calls)
+mcp-cli info server/tool1 > /tmp/i1.json &
+mcp-cli info server/tool2 > /tmp/i2.json &
+wait
+# Then make calls in parallel
 mcp-cli call server/tool1 '{}' > /tmp/r1.json &
 mcp-cli call server/tool2 '{}' > /tmp/r2.json &
 wait
 
 # FORBIDDEN - sequential execution wastes 50%+ of time
+mcp-cli info server/tool1
+mcp-cli info server/tool2
 mcp-cli call server/tool1 '{}'
 mcp-cli call server/tool2 '{}'
 ```
 
 ## Critical Rules
 
-1. **Always parallelize** 2+ MCP calls using `&` and `wait`
-2. **Never use `bash -c`** with mcp-cli (breaks session context)
-3. **Always redirect output** to temp files (`> /tmp/result.json`)
-4. **Always end with `wait`** before processing results
-5. **Wave batch 50+ calls** into groups of 20-25
+1. **Always parallelize** 2+ MCP operations using `&` and `wait`
+2. **Include `mcp-cli info`** — schema checks are MCP operations too
+3. **Batch aggressively** — aim for 20-25 parallel calls per Bash invocation
+4. **Use Level 2 parallelization** — multiple parallel Bash tool calls when possible
+5. **Never use `bash -c`** with mcp-cli (breaks session context)
+6. **Always redirect output** to temp files (`> /tmp/result.json`)
+7. **Always end with `wait`** before processing results
+
+## Subagent Guidance
+
+When spawning subagents that will make MCP calls:
+- **Pre-batch schemas** — gather all `mcp-cli info` in the parent session before spawning
+- **Pass schemas to subagents** — include required schemas in the subagent prompt
+- **Avoid context thrashing** — don't spawn many small subagents; batch work in fewer agents
+- **Subagents should parallelize too** — include these rules in subagent prompts
 
 ## Performance
 
