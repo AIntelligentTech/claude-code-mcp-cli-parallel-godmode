@@ -31,3 +31,6 @@ __pycache__/
 
 # Benchmark results (local only)
 benchmarks/results/
+
+# Generated hooks configuration (environment-specific)
+.claude/hooks.json
