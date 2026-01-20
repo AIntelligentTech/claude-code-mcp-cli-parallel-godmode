@@ -8,11 +8,12 @@
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.1.12+-blue.svg)](https://claude.ai/claude-code)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg)](#requirements)
 
-| Sequential | Parallel | Speedup |
-|:----------:|:--------:|:-------:|
-| 76 seconds | 4.9 seconds | **15x faster** |
+| Sequential | Level 1 Only | Level 1 + Level 2 |
+| :--------: | :----------: | :---------------: |
+| 76 seconds | 4.9 seconds  |  **~2 seconds**   |
 
-*50 MCP calls in 10 seconds instead of 3 minutes*
+_Complete briefing data (15 MCP calls + files) in 9 seconds instead of 3+
+minutes_
 
 </div>
 
@@ -21,11 +22,13 @@
 ## Quick Start
 
 **Install (all projects):**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash
 ```
 
 **Install (current project only):**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash -s -- --project .
 ```
@@ -57,7 +60,8 @@ rm -rf /tmp/mcp-parallel
 
 ## Why This Exists
 
-Claude Code runs MCP operations **sequentially** by default — each operation waits for the previous one to complete:
+Claude Code runs MCP operations **sequentially** by default — each operation
+waits for the previous one to complete:
 
 ```
 Default:  [op 1: 3.8s] → [op 2: 3.8s] → [op 3: 3.8s] → ... = 76s for 20 operations
@@ -67,7 +71,8 @@ This toolkit enables **two levels of parallelization**:
 
 ### Level 1: Parallel operations within a single Bash invocation
 
-Using background jobs (`&`) and `wait`, multiple MCP operations run simultaneously:
+Using background jobs (`&`) and `wait`, multiple MCP operations run
+simultaneously:
 
 ```
 Single Bash call:  [op 1 ─┬─ op 2 ─┬─ op 3 ─┬─ ...] = 4.9s for 20 operations
@@ -76,7 +81,8 @@ Single Bash call:  [op 1 ─┬─ op 2 ─┬─ op 3 ─┬─ ...] = 4.9s for
 
 ### Level 2: Multiple parallel Bash tool calls
 
-Claude Code can invoke multiple Bash tools simultaneously. Combined with Level 1:
+Claude Code can invoke multiple Bash tools simultaneously. Combined with Level
+1:
 
 ```
 ┌─ Bash call 1: [mcp-cli & mcp-cli & wait] ─┐
@@ -84,13 +90,15 @@ Claude Code can invoke multiple Bash tools simultaneously. Combined with Level 1
 └─ Bash call 3: [mcp-cli & mcp-cli & wait] ─┘
 ```
 
-**Result:** 4×5 parallel calls performs similarly to 1×20 — layers compose without penalty.
+**Result:** 4×5 parallel calls performs similarly to 1×20 — layers compose
+without penalty.
 
 ---
 
 ## Key Principle: ALL MCP Operations
 
-This applies to **both** `mcp-cli info` (schema checks) **and** `mcp-cli call` (tool invocations).
+This applies to **both** `mcp-cli info` (schema checks) **and** `mcp-cli call`
+(tool invocations).
 
 ```bash
 # REQUIRED - parallelize EVERYTHING
@@ -115,21 +123,21 @@ mcp-cli info server/tool2
 
 ### Throughput
 
-| Operations | Sequential | Parallel | Speedup |
-|-----------:|-----------:|---------:|--------:|
-| 2 | 7.6s | 3.8s | **2x** |
-| 10 | 38s | 3.0s | **12.8x** |
-| 20 | 76s | 4.9s | **15.5x** |
-| 50 | 191s | 10.3s | **18.5x** |
-| 100 | 382s | ~15s | **~25x** |
+| Operations | Sequential | Parallel |   Speedup |
+| ---------: | ---------: | -------: | --------: |
+|          2 |       7.6s |     3.8s |    **2x** |
+|         10 |        38s |     3.0s | **12.8x** |
+|         20 |        76s |     4.9s | **15.5x** |
+|         50 |       191s |    10.3s | **18.5x** |
+|        100 |       382s |     ~15s |  **~25x** |
 
 ### Efficiency Gains
 
-| Metric | Before | After | Reduction |
-|--------|-------:|------:|----------:|
-| Time (20 calls) | 76s | 4.9s | **94%** |
-| Model turns | 20 | 1 | **95%** |
-| Output tokens | ~1,600 | ~250 | **84%** |
+| Metric          | Before | After | Reduction |
+| --------------- | -----: | ----: | --------: |
+| Time (20 calls) |    76s |  4.9s |   **94%** |
+| Model turns     |     20 |     1 |   **95%** |
+| Output tokens   | ~1,600 |  ~250 |   **84%** |
 
 </details>
 
@@ -198,13 +206,13 @@ Applies to a single project only:
 
 ### What Gets Installed
 
-| File | Purpose |
-|------|---------|
-| `CLAUDE.md` | Instructions loaded into model context |
-| `.claude/rules/mcp-parallel.md` | Detailed enforcement rules |
-| `.claude/hooks/mcp-cli-gate.sh` | Blocks calls if env var missing |
-| `.claude/hooks/mcp-parallel-reminder.sh` | Suggests parallel pattern |
-| `.claude/hooks.json` | Hook configuration |
+| File                                     | Purpose                                |
+| ---------------------------------------- | -------------------------------------- |
+| `CLAUDE.md`                              | Instructions loaded into model context |
+| `.claude/rules/mcp-parallel.md`          | Detailed enforcement rules             |
+| `.claude/hooks/mcp-cli-gate.sh`          | Blocks calls if env var missing        |
+| `.claude/hooks/mcp-parallel-reminder.sh` | Suggests parallel pattern              |
+| `.claude/hooks.json`                     | Hook configuration                     |
 
 ### Uninstall
 
@@ -219,18 +227,18 @@ curl -fsSL https://raw.githubusercontent.com/.../get.sh | bash -s -- --uninstall
 
 ### Platform Support
 
-| Platform | Status | Notes |
-|----------|:------:|-------|
-| macOS | Supported | Tested on Darwin 25.x |
-| Linux | Supported | Requires bash 4.0+ |
-| Windows | Use WSL2 | Native Windows not supported |
+| Platform |  Status   | Notes                        |
+| -------- | :-------: | ---------------------------- |
+| macOS    | Supported | Tested on Darwin 25.x        |
+| Linux    | Supported | Requires bash 4.0+           |
+| Windows  | Use WSL2  | Native Windows not supported |
 
 ### Dependencies
 
-| Dependency | Install |
-|------------|---------|
-| **jq** | `brew install jq` (macOS) / `apt install jq` (Ubuntu) |
-| **bash 4.0+** | Pre-installed on macOS/Linux |
+| Dependency              | Install                                                |
+| ----------------------- | ------------------------------------------------------ |
+| **jq**                  | `brew install jq` (macOS) / `apt install jq` (Ubuntu)  |
+| **bash 4.0+**           | Pre-installed on macOS/Linux                           |
 | **Claude Code 2.1.12+** | [claude.ai/claude-code](https://claude.ai/claude-code) |
 
 The installer blocks if `jq` is missing.
@@ -357,12 +365,12 @@ SCHEMAS=$(cat /tmp/schema_*.json | jq -s '.')
 
 ### Avoid Context Thrashing
 
-| Do | Don't |
-|----|-------|
-| Batch work into fewer subagents | Spawn many small subagents |
-| Pre-fetch data in parent session | Make redundant MCP calls across agents |
-| Use haiku for exploration tasks | Use opus/sonnet for simple data gathering |
-| Give each subagent substantial work | Create one subagent per MCP call |
+| Do                                  | Don't                                     |
+| ----------------------------------- | ----------------------------------------- |
+| Batch work into fewer subagents     | Spawn many small subagents                |
+| Pre-fetch data in parent session    | Make redundant MCP calls across agents    |
+| Use haiku for exploration tasks     | Use opus/sonnet for simple data gathering |
+| Give each subagent substantial work | Create one subagent per MCP call          |
 
 ### Include Parallelization in Subagent Prompts
 
@@ -464,17 +472,68 @@ done
 
 ## Best Practices Summary
 
-| Do | Don't |
-|----|-------|
-| Parallelize `mcp-cli info` AND `mcp-cli call` | Only parallelize calls, not info checks |
-| Batch 20-25 operations per Bash call | Make many small Bash calls |
-| Use Level 2 (multiple parallel Bash calls) | Rely only on Level 1 |
-| Pre-fetch schemas for subagents | Let each subagent fetch its own schemas |
-| Use waves for dependencies | Guess at dependent values |
-| Always use `wait` after `&` jobs | Forget `wait` before reading results |
-| Redirect output to temp files | Let output go to stdout |
-| Wave batch 100+ operations | Run 200 operations simultaneously |
-| Give subagents substantial work batches | Spawn many small subagents |
+| Do                                            | Don't                                      |
+| --------------------------------------------- | ------------------------------------------ |
+| Parallelize `mcp-cli info` AND `mcp-cli call` | Only parallelize calls, not info checks    |
+| Batch 20-25 operations per Bash call          | Make many small Bash calls                 |
+| Use Level 2 (multiple parallel Bash calls)    | Rely only on Level 1                       |
+| Pre-fetch schemas for subagents               | Let each subagent fetch its own schemas    |
+| Use waves for dependencies                    | Guess at dependent values                  |
+| Always use `wait` after `&` jobs              | Forget `wait` before reading results       |
+| Redirect output to temp files                 | Let output go to stdout                    |
+| Wave batch 100+ operations                    | Run 200 operations simultaneously          |
+| Give subagents substantial work batches       | Spawn many small subagents                 |
+| **Combine result reading in same Bash block** | **Separate tool calls to read temp files** |
+| **Mix Read tools with Bash in one message**   | **Serialize file reads after MCP calls**   |
+
+---
+
+## Real-World Tested Patterns
+
+For comprehensive patterns verified in production (AI Co-Founder briefings with
+Google Workspace + GitHub + local files), see:
+
+**[docs/real-world-patterns.md](docs/real-world-patterns.md)**
+
+Key findings from production testing (January 2026):
+
+| Pattern               | Time     | Improvement    |
+| --------------------- | -------- | -------------- |
+| Sequential baseline   | ~3-4 min | —              |
+| Level 1 only          | ~90s     | 2-3x faster    |
+| **Level 1 + Level 2** | **~9s**  | **20x faster** |
+
+### Critical Insight: Combined Execute + Read
+
+```bash
+# WRONG: 2 tool calls
+mcp-cli call ... > /tmp/r1.json &
+wait
+# ... separate tool call ...
+cat /tmp/r1.json
+
+# CORRECT: 1 tool call - combine execute + read
+mcp-cli call ... > /tmp/r1.json &
+wait
+cat /tmp/r1.json  # Same Bash block
+```
+
+### Level 2 Verified
+
+Multiple Bash tools in a single Claude message **truly run in parallel**:
+
+```
+Single message with 3 Bash tools + 4 Read tools:
+├─ Bash 1: 5 calendar calls (1.5s)  ─┐
+├─ Bash 2: 5 task calls (1.5s)      ─┼─ All parallel
+├─ Bash 3: Gmail + Git (1.0s)       ─┘
+├─ Read: GOALS.md                    ─┐
+├─ Read: COMMITMENTS.md              ─┼─ All parallel
+├─ Read: CLIENTS.md                  ─┘
+└─ Read: EXPENSES.md
+
+Total: ~3 seconds for 15 MCP calls + 4 files
+```
 
 ---
 
@@ -490,8 +549,11 @@ MIT License. See [LICENSE](LICENSE).
 
 <div align="center">
 
-**[Report Bug](https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/issues)** · **[Request Feature](https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/issues)**
+**[Report Bug](https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/issues)**
+·
+**[Request Feature](https://github.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/issues)**
 
-*Created by [AIntelligent Technologies](https://aintelligenttech.com) · January 2026*
+_Created by [AIntelligent Technologies](https://aintelligenttech.com) · January
+2026_
 
 </div>
