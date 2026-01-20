@@ -2,29 +2,153 @@
 
 <div align="center">
 
-**Turn 60-second MCP workflows into 9-second operations**
+**Transform sequential MCP operations into parallel execution**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.1.12+-blue.svg)](https://claude.ai/claude-code)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg)](#requirements)
 
-| Sequential | Level 1 Only | Level 1 + Level 2 |
-| :--------: | :----------: | :---------------: |
-| 76 seconds | 4.9 seconds  |  **~2 seconds**   |
-
-_MCP data gathering (25-30 operations) in ~9 seconds — **6-7x faster**_
-
-> **Scope:** This toolkit optimizes **MCP-CLI operations** specifically. For
-> complex workflows with subagents, git analysis, or synthesis, see
-> [Scope & Limitations](#scope--limitations).
-
 </div>
+
+---
+
+## What This Does
+
+This toolkit enables **parallel execution** of MCP-CLI operations within Claude
+Code, reducing wall-clock time by **up to 18x** for batch operations.
+
+```bash
+# Without this toolkit (sequential): ~76 seconds for 20 calls
+mcp-cli call server/tool1 '{}'   # 3.8s
+mcp-cli call server/tool2 '{}'   # 3.8s
+# ... 18 more calls
+
+# With this toolkit (parallel): ~4.9 seconds for 20 calls
+mcp-cli call server/tool1 '{}' > /tmp/r1.json &
+mcp-cli call server/tool2 '{}' > /tmp/r2.json &
+# ... 18 more calls
+wait
+```
+
+---
+
+## Performance: Honest Numbers
+
+### Layer 3: MCP-CLI Parallelism (Core Technique)
+
+This is the primary value of this toolkit. Verified benchmarks:
+
+| Parallel Calls | Sequential Time | Parallel Time | Speedup   |
+| -------------- | --------------- | ------------- | --------- |
+| 2              | ~7.6s           | ~3.8s         | **2.0x**  |
+| 5              | ~19s            | ~3.8s         | **5.0x**  |
+| 10             | ~38s            | ~3.9s         | **9.7x**  |
+| 20             | ~76s            | ~4.9s         | **15.5x** |
+| 50 (batched)   | ~190s           | ~10.5s        | **18.1x** |
+
+**Key insight:** Speedup is genuine time reduction for the same work. 20 MCP
+calls that took 76 seconds now take 4.9 seconds.
+
+### Layer 1: Subagent Parallelism (Horizontal Scaling)
+
+Claude Code's Task tool allows spawning multiple subagents in one message.
+**This is throughput scaling, not speedup.**
+
+| Configuration            | What It Does            | Wall-Clock Time |
+| ------------------------ | ----------------------- | --------------- |
+| 1 agent, 17 L3 ops       | 17 operations complete  | ~3.2s           |
+| 3 agents, 17 L3 ops each | 51 operations complete  | ~3.5s           |
+| 6 agents, 17 L3 ops each | 102 operations complete | ~4.0s           |
+
+**Important distinction:**
+
+- L1 does NOT make L3 faster
+- L1 allows MORE operations to happen simultaneously
+- Same wall-clock time, ~6x more total operations processed
+
+### Combined Effect: What You Actually Get
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  HONEST PERFORMANCE CLAIMS                                                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  L3 (MCP-CLI Parallelism):                                                      │
+│  ─────────────────────────                                                      │
+│  • Speedup: 2x-18x depending on batch size                                      │
+│  • Same operations, less wall-clock time                                        │
+│  • Diminishing returns above ~50 parallel calls                                 │
+│                                                                                 │
+│  L1 (Subagent Parallelism):                                                     │
+│  ─────────────────────────                                                      │
+│  • Throughput: ~6x more operations per wall-clock second                        │
+│  • Horizontal scaling, not vertical speedup                                     │
+│  • Adds startup overhead (~1-2s per agent)                                      │
+│                                                                                 │
+│  L1 + L3 Combined:                                                              │
+│  ─────────────────                                                              │
+│  • Process 100+ operations in ~5s                                               │
+│  • Sequential baseline for same work: ~400s                                     │
+│  • Effective speedup for large workloads: ~80x                                  │
+│  • But most of this comes from L3 alone                                         │
+│                                                                                 │
+│  WHAT L1 ACTUALLY ADDS TO L3:                                                   │
+│  ─────────────────────────────                                                  │
+│  • For fixed operations: marginal improvement (~1.2-1.5x)                       │
+│  • For variable operations: ~6x more throughput at similar latency              │
+│  • Primary value: domain separation (calendar agent, email agent, git agent)    │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## The Three-Layer Architecture
+
+### Why Three Layers?
+
+Through testing, we discovered that Claude Code doesn't implement parallel tool
+calls within a single agent turn, despite the API supporting it. We compensate
+with layers we CAN control:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        THREE-LAYER PARALLELISM ARCHITECTURE                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  LAYER 1: SUBAGENT PARALLELISM                                                  │
+│  ═══════════════════════════════                                                │
+│  Main session spawns multiple Task tools in ONE message                         │
+│  Effect: Horizontal scaling (more agents working simultaneously)                │
+│  NOT a speedup for fixed work — it's throughput scaling                         │
+│                                                                                 │
+│  LAYER 2: TOOL CALL PARALLELISM                                                 │
+│  ═════════════════════════════════                                              │
+│  ⚠️  API supports this. Claude Code DOES NOT implement it.                      │
+│  We cannot control this layer.                                                  │
+│                                                                                 │
+│  LAYER 3: MCP-CLI PARALLELISM                                                   │
+│  ════════════════════════════════                                               │
+│  Background jobs within Bash: `mcp-cli ... &`                                   │
+│  Effect: Genuine speedup (2x-18x for same operations)                           │
+│  THIS IS THE PRIMARY VALUE of this toolkit                                      │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Layer Comparison
+
+| Layer | What It Provides    | Speedup for Fixed Work | Throughput Scaling |
+| ----- | ------------------- | ---------------------- | ------------------ |
+| L1    | Parallel subagents  | ~1x (marginal)         | **~6x**            |
+| L2    | Parallel tool calls | N/A (not implemented)  | N/A                |
+| L3    | Parallel MCP-CLI    | **2x-18x**             | ~1x                |
 
 ---
 
 ## Quick Start
 
-**Install (all projects):**
+**Install (user-level, all projects):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AIntelligentTech/claude-code-mcp-cli-parallel-godmode/main/get.sh | bash
@@ -39,16 +163,6 @@ curl -fsSL https://raw.githubusercontent.com/AIntelligentTech/claude-code-mcp-cl
 Then restart Claude Code.
 
 <details>
-<summary>What the installer does</summary>
-
-- Installs `jq` if missing (via brew/apt/dnf/yum/pacman)
-- Adds `ENABLE_EXPERIMENTAL_MCP_CLI=true` to your shell profile
-- Installs hooks and rules
-- Verifies all components
-
-</details>
-
-<details>
 <summary>Manual install</summary>
 
 ```bash
@@ -61,228 +175,232 @@ rm -rf /tmp/mcp-parallel
 
 ---
 
-## Why This Exists
+## Core Pattern: L3 Parallelism
 
-Claude Code runs MCP operations **sequentially** by default — each operation
-waits for the previous one to complete:
-
-```
-Default:  [op 1: 3.8s] → [op 2: 3.8s] → [op 3: 3.8s] → ... = 76s for 20 operations
-```
-
-This toolkit enables **two levels of parallelization**:
-
-### Level 1: Parallel operations within a single Bash invocation
-
-Using background jobs (`&`) and `wait`, multiple MCP operations run
-simultaneously:
-
-```
-Single Bash call:  [op 1 ─┬─ op 2 ─┬─ op 3 ─┬─ ...] = 4.9s for 20 operations
-                          └────────┴────────┘
-```
-
-### Level 2: Multiple parallel Bash tool calls
-
-Claude Code can invoke multiple Bash tools simultaneously. Combined with Level
-1:
-
-```
-┌─ Bash call 1: [mcp-cli & mcp-cli & wait] ─┐
-├─ Bash call 2: [mcp-cli & mcp-cli & wait] ─┼─ All run in parallel
-└─ Bash call 3: [mcp-cli & mcp-cli & wait] ─┘
-```
-
-**Result:** 4×5 parallel calls performs similarly to 1×20 — layers compose
-without penalty.
-
----
-
-## Scope & Limitations
-
-### What This Toolkit Optimizes
-
-✅ **MCP-CLI operations** — Calls to Google Workspace, GitHub, claude-mem, etc.
-✅ **File reads** — Parallel Read tool invocations in same message ✅ **Git
-analysis** — Runs in parallel Bash tool alongside MCP calls ✅ **Eliminates
-subagent overhead** — Direct calls replace tier-1 agent spawning
-
-### What This Toolkit Does NOT Optimize
-
-❌ **Token processing** — LLM synthesis is inherently sequential (~20-40s) ❌
-**Dependent operations** — When call B needs result of call A
-
-### Key Insight: Direct MCP Replaces Subagents
-
-The major optimization is **eliminating tier-1 subagent overhead entirely**:
-
-| Old (Subagents)               | New (Direct MCP)         | Savings  |
-| ----------------------------- | ------------------------ | -------- |
-| Spawn calendar-scanner → wait | `mcp-cli call ... &`     | ~3-5s    |
-| Spawn email-scanner → wait    | `mcp-cli call ... &`     | ~3-5s    |
-| Spawn tasks-scanner → wait    | `mcp-cli call ... &`     | ~3-5s    |
-| Spawn memory-scanner → wait   | `mcp-cli call ... &`     | ~3-5s    |
-| Spawn vault-scanner → wait    | `Read: file.md`          | ~3-5s    |
-| Spawn git-scanner → wait      | `git log & git status &` | ~3-5s    |
-| **~20-30s overhead**          | **0s overhead**          | **~25s** |
-
-### Optimized Briefing Architecture
-
-With direct MCP, **everything runs in one parallel wave**:
-
-| Component                  | Time        | Parallelized?             |
-| -------------------------- | ----------- | ------------------------- |
-| MCP operations (~30 calls) | ~9s         | ✅ Yes, parallel with git |
-| Git analysis (25 repos)    | ~10-15s     | ✅ Yes, parallel with MCP |
-| Vault file reads           | ~1s         | ✅ Yes, parallel Read     |
-| **Data gathering**         | **~15s**    | max(9s, 15s, 1s)          |
-| Synthesis                  | ~20-40s     | Sequential (LLM-bound)    |
-| **End-to-end**             | **~35-55s** | **3-4x faster**           |
-
-**Bottom line:** Direct parallel MCP + git eliminates subagent overhead and
-reduces end-to-end briefing from **2-3 minutes to ~35-55 seconds**.
-
----
-
-## Key Principle: ALL MCP Operations
-
-This applies to **both** `mcp-cli info` (schema checks) **and** `mcp-cli call`
-(tool invocations).
+The primary technique. Use background jobs with `&` and `wait`:
 
 ```bash
-# REQUIRED - parallelize EVERYTHING
-mcp-cli info server/tool1 > /tmp/i1.json &
-mcp-cli info server/tool2 > /tmp/i2.json &
-wait
-mcp-cli call server/tool1 '{}' > /tmp/r1.json &
-mcp-cli call server/tool2 '{}' > /tmp/r2.json &
+# Execute operations in parallel
+mcp-cli call google-workspace/get_events '{}' > /tmp/events.json &
+mcp-cli call google-workspace/list_tasks '{}' > /tmp/tasks.json &
+mcp-cli call google-workspace/search_gmail_messages '{}' > /tmp/email.json &
 wait
 
-# FORBIDDEN - sequential info checks waste time too
-mcp-cli info server/tool1
-mcp-cli info server/tool2
+# Process results
+cat /tmp/events.json /tmp/tasks.json /tmp/email.json
 ```
 
----
+### Required Elements
 
-## Performance
+| Element            | Purpose                                    |
+| ------------------ | ------------------------------------------ |
+| `&`                | Run command in background                  |
+| `> /tmp/file.json` | Capture output (background jobs need this) |
+| `wait`             | Block until all background jobs complete   |
 
-<details>
-<summary><strong>Verified benchmarks (January 2026)</strong></summary>
+### Wave Batching for Large Operations
 
-### Throughput
-
-| Operations | Sequential | Parallel |   Speedup |
-| ---------: | ---------: | -------: | --------: |
-|          2 |       7.6s |     3.8s |    **2x** |
-|         10 |        38s |     3.0s | **12.8x** |
-|         20 |        76s |     4.9s | **15.5x** |
-|         50 |       191s |    10.3s | **18.5x** |
-|        100 |       382s |     ~15s |  **~25x** |
-
-### Efficiency Gains
-
-| Metric          | Before | After | Reduction |
-| --------------- | -----: | ----: | --------: |
-| Time (20 calls) |    76s |  4.9s |   **94%** |
-| Model turns     |     20 |     1 |   **95%** |
-| Output tokens   | ~1,600 |  ~250 |   **84%** |
-
-</details>
-
----
-
-## How It Works
-
-The toolkit installs four enforcement layers:
-
-```
-┌─────────────────────────────────────────────────────┐
-│  CLAUDE.md          │  Instructions in context      │
-├─────────────────────────────────────────────────────┤
-│  rules/             │  Detailed enforcement rules   │
-├─────────────────────────────────────────────────────┤
-│  mcp-cli-gate.sh    │  Blocks if env var not set    │
-├─────────────────────────────────────────────────────┤
-│  mcp-parallel-      │  Reminds to use parallel      │
-│  reminder.sh        │  pattern for ALL mcp-cli ops  │
-└─────────────────────────────────────────────────────┘
-```
-
-Claude Code learns to transform this:
+For 50+ operations, batch into waves to avoid resource exhaustion:
 
 ```bash
-# Before: Sequential (76 seconds)
-mcp-cli info server/tool1
-mcp-cli info server/tool2
+# Process 100 operations in waves of 25
+for wave in 1 2 3 4; do
+  start=$((($wave - 1) * 25 + 1))
+  end=$(($wave * 25))
+
+  for i in $(seq $start $end); do
+    mcp-cli call server/tool "{\"id\":$i}" > /tmp/r$i.json &
+  done
+  wait  # Complete wave before starting next
+done
+```
+
+---
+
+## Advanced Pattern: L1 + L3 (Throughput Scaling)
+
+When you need to process many operations across different domains, use subagents
+for **horizontal scaling**:
+
+```yaml
+# Main session sends ONE message with multiple Task tools
+# All agents execute in parallel (L1), each using parallel MCP (L3)
+
+Task:
+  subagent_type: general-purpose
+  description: "Calendar scanner"
+  prompt: |
+    Fetch calendar events using parallel MCP-CLI.
+
+    mcp-cli call google-workspace/get_events '{"calendar_id":"cal1"}' > /tmp/cal1.json &
+    mcp-cli call google-workspace/get_events '{"calendar_id":"cal2"}' > /tmp/cal2.json &
+    wait
+
+    Target output: 400-600 tokens (structured YAML).
+
+Task:
+  subagent_type: general-purpose
+  description: "Email scanner"
+  prompt: |
+    Fetch recent emails using parallel MCP-CLI.
+
+    mcp-cli call google-workspace/search_gmail_messages '{"query":"is:unread"}' > /tmp/unread.json &
+    mcp-cli call google-workspace/search_gmail_messages '{"query":"in:inbox"}' > /tmp/inbox.json &
+    wait
+
+    Target output: 400-600 tokens.
+
+Task:
+  subagent_type: general-purpose
+  description: "Git analyzer"
+  prompt: |
+    Analyze git repositories with parallel commands.
+
+    for repo in /path/to/repos/*; do
+      git -C "$repo" log --oneline -10 &
+    done
+    wait
+
+    Target output: 400-800 tokens.
+```
+
+**Result:**
+
+- 3 agents run in parallel (L1)
+- Each agent runs 2-10 operations in parallel (L3)
+- Total: ~20 operations complete in ~4s
+- Sequential baseline: ~80s
+
+**Note:** This is throughput scaling. The same 20 operations with L3 alone would
+take ~4s. L1's value here is domain separation and cleaner code, not additional
+speedup.
+
+---
+
+## File System Communication Pattern
+
+For large data sets, have subagents write to files, then read selectively:
+
+```bash
+# Subagent writes data to temp files
+mcp-cli call google-workspace/get_events '{}' > /tmp/data/events.json &
+mcp-cli call google-workspace/list_tasks '{}' > /tmp/data/tasks.json &
+wait
+
+# Create manifest summarizing what was collected
+cat > /tmp/data/manifest.json << 'EOF'
+{
+  "files": ["events.json", "tasks.json"],
+  "summary": {"events": 15, "tasks": 8}
+}
+EOF
+```
+
+```yaml
+# Main session reads manifest first, then selectively loads
+Read: /tmp/data/manifest.json
+Read: /tmp/data/events.json  # Only if needed based on manifest
+```
+
+**Benefit:** Subagent can process 100k+ tokens; main session loads only what it
+needs.
+
+---
+
+## Known Issues
+
+### Issue 1: Subagent Model Selection Bug
+
+Setting `model: haiku` in Task tool doesn't reliably use the specified model.
+
+**Workaround:** Use token budget constraints in prompts:
+
+```yaml
+Task:
+  prompt: |
+    ...
+    IMPORTANT: Target output 400-600 tokens maximum.
+    Return structured YAML, not verbose prose.
+```
+
+### Issue 2: Layer 2 Not Implemented
+
+Claude API supports parallel tool calls within a turn. Claude Code doesn't use
+this capability. We compensate with L1 and L3.
+
+### Issue 3: Session Context Loss
+
+Don't use `bash -c` with mcp-cli — it loses session context:
+
+```bash
+# WRONG - loses MCP session context
+bash -c 'mcp-cli call server/tool "{}"'
+
+# CORRECT - preserves session
+mcp-cli call server/tool '{}' > /tmp/result.json &
+wait
+```
+
+---
+
+## Anti-Patterns
+
+### Sequential MCP calls
+
+```bash
+# WRONG: 3x time
 mcp-cli call server/tool1 '{}'
 mcp-cli call server/tool2 '{}'
-# ... 16 more operations
-```
+mcp-cli call server/tool3 '{}'
 
-Into this:
-
-```bash
-# After: Parallel (4.9 seconds)
-mcp-cli info server/tool1 > /tmp/i1.json &
-mcp-cli info server/tool2 > /tmp/i2.json &
-wait
+# RIGHT: 1x time (parallel)
 mcp-cli call server/tool1 '{}' > /tmp/r1.json &
 mcp-cli call server/tool2 '{}' > /tmp/r2.json &
-# ... 16 more operations
+mcp-cli call server/tool3 '{}' > /tmp/r3.json &
 wait
 ```
 
----
-
-## Installation
-
-### Option A: User-Level (Recommended)
-
-Applies to all your Claude Code projects:
+### Missing output redirect
 
 ```bash
-./install.sh --user
+# WRONG: output lost
+mcp-cli call server/tool '{}' &
+wait
+# Where did the output go?
+
+# RIGHT: output captured
+mcp-cli call server/tool '{}' > /tmp/result.json &
+wait
+cat /tmp/result.json
 ```
 
-### Option B: Project-Level
-
-Applies to a single project only:
+### Forgetting wait
 
 ```bash
-./install.sh --project /path/to/your/project
+# WRONG: results incomplete
+mcp-cli call server/tool1 '{}' > /tmp/r1.json &
+mcp-cli call server/tool2 '{}' > /tmp/r2.json &
+cat /tmp/r1.json  # File may not exist or be incomplete!
+
+# RIGHT: wait for completion
+mcp-cli call server/tool1 '{}' > /tmp/r1.json &
+mcp-cli call server/tool2 '{}' > /tmp/r2.json &
+wait
+cat /tmp/r1.json /tmp/r2.json
 ```
 
-### What Gets Installed
+### Claiming L1 provides speedup
 
-| File                                     | Purpose                                |
-| ---------------------------------------- | -------------------------------------- |
-| `CLAUDE.md`                              | Instructions loaded into model context |
-| `.claude/rules/mcp-parallel.md`          | Detailed enforcement rules             |
-| `.claude/hooks/mcp-cli-gate.sh`          | Blocks calls if env var missing        |
-| `.claude/hooks/mcp-parallel-reminder.sh` | Suggests parallel pattern              |
-| `.claude/hooks.json`                     | Hook configuration                     |
+```yaml
+# MISLEADING: "6x faster with subagents"
+# L1 provides throughput scaling, not speedup for fixed work
 
-### Uninstall
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/.../get.sh | bash -s -- --uninstall --user
-# or: --uninstall --project .
+# ACCURATE: "6x more operations in same wall-clock time"
 ```
 
 ---
 
 ## Requirements
-
-### Platform Support
-
-| Platform |  Status   | Notes                        |
-| -------- | :-------: | ---------------------------- |
-| macOS    | Supported | Tested on Darwin 25.x        |
-| Linux    | Supported | Requires bash 4.0+           |
-| Windows  | Use WSL2  | Native Windows not supported |
-
-### Dependencies
 
 | Dependency              | Install                                                |
 | ----------------------- | ------------------------------------------------------ |
@@ -290,313 +408,28 @@ curl -fsSL https://raw.githubusercontent.com/.../get.sh | bash -s -- --uninstall
 | **bash 4.0+**           | Pre-installed on macOS/Linux                           |
 | **Claude Code 2.1.12+** | [claude.ai/claude-code](https://claude.ai/claude-code) |
 
-The installer blocks if `jq` is missing.
-
----
-
-## Usage Patterns
-
-### Basic: Parallel Operations
-
-```bash
-# Run 3 info checks + 3 calls in parallel
-mcp-cli info server/tool1 > /tmp/i1.json &
-mcp-cli info server/tool2 > /tmp/i2.json &
-mcp-cli info server/tool3 > /tmp/i3.json &
-wait
-
-mcp-cli call server/tool1 '{}' > /tmp/r1.json &
-mcp-cli call server/tool2 '{}' > /tmp/r2.json &
-mcp-cli call server/tool3 '{}' > /tmp/r3.json &
-wait
-
-# Process results
-jq -s '.' /tmp/r1.json /tmp/r2.json /tmp/r3.json
-```
-
-### Optimal Batching (20-25 operations per wave)
-
-```bash
-# Batch independent operations in one Bash call (target 20-25)
-# Schema checks
-mcp-cli info google-workspace/get_events > /tmp/i1.json &
-mcp-cli info google-workspace/search_gmail_messages > /tmp/i2.json &
-mcp-cli info google-workspace/list_task_lists > /tmp/i3.json &
-mcp-cli info github/list_issues > /tmp/i4.json &
-mcp-cli info github/list_pull_requests > /tmp/i5.json &
-# ... up to 20-25 total
-wait
-
-# Tool calls
-mcp-cli call google-workspace/get_events '{"cal":"cal1"}' > /tmp/r1.json &
-mcp-cli call google-workspace/get_events '{"cal":"cal2"}' > /tmp/r2.json &
-# ... up to 20-25 total
-wait
-```
-
-### Dependency Waves
-
-When calls depend on earlier results, use waves:
-
-```bash
-# Wave 1: Independent operations run in parallel
-mcp-cli info server/list_items > /tmp/schema.json &
-mcp-cli call server/list_items '{}' > /tmp/items.json &
-mcp-cli call server/get_config '{}' > /tmp/config.json &
-wait
-
-# Extract value needed for Wave 2
-ITEM_ID=$(jq -r '.items[0].id' /tmp/items.json)
-
-# Wave 2: Dependent calls (also parallel)
-mcp-cli call server/get_item "{\"id\":\"$ITEM_ID\"}" > /tmp/item.json &
-mcp-cli call server/get_history "{\"id\":\"$ITEM_ID\"}" > /tmp/history.json &
-wait
-```
-
-### Large Batches (100+ operations)
-
-Batch into waves of 50-75 to balance throughput and resource usage:
-
-```bash
-# Process 150 items in 3 waves
-ITEMS=$(seq 1 150)
-BATCH_SIZE=50
-
-for item in $ITEMS; do
-  mcp-cli call server/process "{\"id\":$item}" > "/tmp/r${item}.json" &
-  # Every BATCH_SIZE items, wait for batch to complete
-  [ $((item % BATCH_SIZE)) -eq 0 ] && wait
-done
-wait  # Final batch
-```
-
-### Level 2: Multiple Parallel Bash Calls
-
-Invoke multiple Bash tools simultaneously for multiplicative effect:
-
-```bash
-# Bash call 1 (parallel with Bash call 2)
-mcp-cli call google-workspace/get_events '{"cal":"cal1"}' > /tmp/cal1.json &
-mcp-cli call google-workspace/get_events '{"cal":"cal2"}' > /tmp/cal2.json &
-# ... 23 more calendar calls
-wait
-```
-
-```bash
-# Bash call 2 (parallel with Bash call 1)
-mcp-cli call github/list_issues '{"repo":"repo1"}' > /tmp/gh1.json &
-mcp-cli call github/list_issues '{"repo":"repo2"}' > /tmp/gh2.json &
-# ... 23 more GitHub calls
-wait
-```
-
-**Result:** 50 operations complete in ~5 seconds using two parallel Bash calls.
-
----
-
-## Subagent Best Practices
-
-When spawning subagents that will make MCP calls:
-
-### Pre-batch Schemas in Parent Session
-
-```bash
-# Parent session: gather all schemas before spawning subagents
-mcp-cli info google-workspace/get_events > /tmp/schema_events.json &
-mcp-cli info google-workspace/search_gmail_messages > /tmp/schema_gmail.json &
-mcp-cli info google-workspace/list_tasks > /tmp/schema_tasks.json &
-wait
-
-# Pass schemas to subagent via prompt
-SCHEMAS=$(cat /tmp/schema_*.json | jq -s '.')
-```
-
-### Avoid Context Thrashing
-
-| Do                                  | Don't                                     |
-| ----------------------------------- | ----------------------------------------- |
-| Batch work into fewer subagents     | Spawn many small subagents                |
-| Pre-fetch data in parent session    | Make redundant MCP calls across agents    |
-| Use haiku for exploration tasks     | Use opus/sonnet for simple data gathering |
-| Give each subagent substantial work | Create one subagent per MCP call          |
-
-### Include Parallelization in Subagent Prompts
-
-When spawning subagents, explicitly include:
-
-```
-IMPORTANT: Use parallel MCP orchestration. Batch all mcp-cli operations:
-mcp-cli info/call ... > /tmp/r1.json &
-mcp-cli info/call ... > /tmp/r2.json &
-wait
-```
-
----
-
-## Real-World Example
-
-### Daily Briefing (31 sources in 5 seconds)
-
-```bash
-EMAIL="you@example.com"
-
-# Wave 1: All schemas + initial data in parallel (one Bash call)
-mcp-cli info google-workspace/get_events > /tmp/i1.json &
-mcp-cli info google-workspace/search_gmail_messages > /tmp/i2.json &
-mcp-cli info google-workspace/list_task_lists > /tmp/i3.json &
-mcp-cli call google-workspace/get_events "{\"user_google_email\":\"$EMAIL\",\"calendar_id\":\"cal1\"}" > /tmp/cal1.json &
-mcp-cli call google-workspace/get_events "{\"user_google_email\":\"$EMAIL\",\"calendar_id\":\"cal2\"}" > /tmp/cal2.json &
-# ... 9 calendars total
-mcp-cli call google-workspace/search_gmail_messages "{\"user_google_email\":\"$EMAIL\",\"query\":\"is:unread\"}" > /tmp/emails.json &
-mcp-cli call google-workspace/list_task_lists "{\"user_google_email\":\"$EMAIL\"}" > /tmp/tasks.json &
-mcp-cli call github/list_issues '{"repo":"myorg/repo1"}' > /tmp/issues.json &
-mcp-cli call github/list_pull_requests '{"repo":"myorg/repo1"}' > /tmp/prs.json &
-wait
-
-# Total: 31 MCP operations in ~5 seconds instead of ~2 minutes
-```
-
----
-
-## Troubleshooting
-
-<details>
-<summary><strong>"MCP endpoint file not found"</strong></summary>
-
-Session context lost. Don't use `bash -c` with new directories:
-
-```bash
-# Wrong
-bash -c 'TMPDIR=$(mktemp -d); mcp-cli call ...'
-
-# Correct
-mcp-cli call ... > /tmp/result.json &
-wait
-```
-
-</details>
-
-<details>
-<summary><strong>"mcp-cli: command not found"</strong></summary>
+**Environment variable:**
 
 ```bash
 export ENABLE_EXPERIMENTAL_MCP_CLI=true
-# Add to ~/.zshrc or ~/.bashrc for persistence
 ```
-
-</details>
-
-<details>
-<summary><strong>Results not in temp files</strong></summary>
-
-Always use `wait` after background jobs:
-
-```bash
-mcp-cli call ... > /tmp/r1.json &
-mcp-cli call ... > /tmp/r2.json &
-wait  # Don't forget this!
-```
-
-</details>
-
-<details>
-<summary><strong>High memory with 100+ operations</strong></summary>
-
-Use wave batching — batch into groups of 50-75:
-
-```bash
-for wave in 1 2; do
-  # 50 operations per wave
-  for i in $(seq 1 50); do
-    mcp-cli call ... > /tmp/r$i.json &
-  done
-  wait
-done
-```
-
-</details>
 
 ---
 
-## Best Practices Summary
+## Documentation
 
-| Do                                            | Don't                                      |
-| --------------------------------------------- | ------------------------------------------ |
-| Parallelize `mcp-cli info` AND `mcp-cli call` | Only parallelize calls, not info checks    |
-| Batch 20-25 operations per Bash call          | Make many small Bash calls                 |
-| Use Level 2 (multiple parallel Bash calls)    | Rely only on Level 1                       |
-| Pre-fetch schemas for subagents               | Let each subagent fetch its own schemas    |
-| Use waves for dependencies                    | Guess at dependent values                  |
-| Always use `wait` after `&` jobs              | Forget `wait` before reading results       |
-| Redirect output to temp files                 | Let output go to stdout                    |
-| Wave batch 100+ operations                    | Run 200 operations simultaneously          |
-| Give subagents substantial work batches       | Spawn many small subagents                 |
-| **Combine result reading in same Bash block** | **Separate tool calls to read temp files** |
-| **Mix Read tools with Bash in one message**   | **Serialize file reads after MCP calls**   |
-
----
-
-## Real-World Tested Patterns
-
-For comprehensive patterns verified in production (AI Co-Founder briefings with
-Google Workspace + GitHub + local files), see:
-
-**[docs/real-world-patterns.md](docs/real-world-patterns.md)**
-
-Key findings from production testing (January 2026):
-
-| Component               | Old (Subagents) | New (Direct MCP) | Speedup  |
-| ----------------------- | --------------- | ---------------- | -------- |
-| **Data gathering**      | ~90s            | ~15s             | **6x**   |
-| **End-to-end briefing** | ~2-3 min        | ~35-55s          | **3-4x** |
-
-> **Key insight:** Direct parallel MCP calls **replace tier-1 subagents**,
-> eliminating ~20-30s of agent startup overhead. MCP + Git + Vault reads all
-> execute in parallel in a single Claude message.
-
-### Critical Insight: Combined Execute + Read
-
-```bash
-# WRONG: 2 tool calls
-mcp-cli call ... > /tmp/r1.json &
-wait
-# ... separate tool call ...
-cat /tmp/r1.json
-
-# CORRECT: 1 tool call - combine execute + read
-mcp-cli call ... > /tmp/r1.json &
-wait
-cat /tmp/r1.json  # Same Bash block
-```
-
-### Level 2 Verified: Complete Data Gathering
-
-Multiple Bash tools in a single Claude message **truly run in parallel**:
-
-```
-Single message with 2 Bash tools + 4 Read tools:
-├─ Bash 1: All MCP calls (~9s)       ─┐
-│   └─ Calendars, Tasks, Gmail,      │
-│      claude-mem (all &, then wait) │
-├─ Bash 2: Git analysis (~10-15s)    ─┼─ All parallel
-│   └─ 25 repos with internal &      │
-├─ Read: GOALS.md                    ─┤
-├─ Read: COMMITMENTS.md              ─┤
-├─ Read: CLIENTS.md                  ─┤
-└─ Read: EXPENSES.md                 ─┘
-
-Data gathering: max(9s, 15s, 1s) = ~15 seconds
-```
-
-This **replaces the entire tier-1 subagent layer**, eliminating ~20-30 seconds
-of agent startup overhead. Only synthesis (~20-40s) remains sequential.
+| Document                                                             | Content                          |
+| -------------------------------------------------------------------- | -------------------------------- |
+| [docs/three-layer-architecture.md](docs/three-layer-architecture.md) | Technical architecture deep-dive |
+| [docs/real-world-patterns.md](docs/real-world-patterns.md)           | Production-tested patterns       |
+| [examples/README.md](examples/README.md)                             | Code examples                    |
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions welcome. Please ensure claims are backed by reproducible
+benchmarks.
 
 ## License
 
