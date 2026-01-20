@@ -32,11 +32,31 @@ wait
 
 ---
 
+## The Three Layers
+
+This toolkit compensates for an architectural gap in Claude Code. Here's the
+full picture:
+
+| Layer | Name                  | Status             | What It Does                |
+| ----- | --------------------- | ------------------ | --------------------------- |
+| L1    | Subagent parallelism  | ✅ Works           | Multiple agents in parallel |
+| L2    | Tool call parallelism | ❌ Not implemented | Multiple tools per turn     |
+| L3    | MCP-CLI parallelism   | ✅ Works           | Background jobs in Bash     |
+
+**Why L2 matters:** The Claude API supports parallel tool calls, but Claude Code
+doesn't implement this. We discovered this through analysis of 113 sessions
+showing 0/3,441 tool calls executed in parallel within a single agent turn.
+
+**What we can control:** L1 and L3. This toolkit focuses on L3 (the primary
+speedup) with L1 for throughput scaling.
+
+---
+
 ## Performance: Honest Numbers
 
-### Layer 3: MCP-CLI Parallelism (Core Technique)
+### L3: MCP-CLI Parallelism (Primary Value)
 
-This is the primary value of this toolkit. Verified benchmarks:
+This is the core technique. Genuine speedup — same work, less time:
 
 | Parallel Calls | Sequential Time | Parallel Time | Speedup   |
 | -------------- | --------------- | ------------- | --------- |
@@ -46,10 +66,9 @@ This is the primary value of this toolkit. Verified benchmarks:
 | 20             | ~76s            | ~4.9s         | **15.5x** |
 | 50 (batched)   | ~190s           | ~10.5s        | **18.1x** |
 
-**Key insight:** Speedup is genuine time reduction for the same work. 20 MCP
-calls that took 76 seconds now take 4.9 seconds.
+**Key insight:** 20 MCP calls that took 76 seconds now take 4.9 seconds.
 
-### Layer 1: Subagent Parallelism (Horizontal Scaling)
+### L1: Subagent Parallelism (Throughput Scaling)
 
 Claude Code's Task tool allows spawning multiple subagents in one message.
 **This is throughput scaling, not speedup.**
@@ -64,7 +83,13 @@ Claude Code's Task tool allows spawning multiple subagents in one message.
 
 - L1 does NOT make L3 faster
 - L1 allows MORE operations to happen simultaneously
-- Same wall-clock time, ~6x more total operations processed
+- Same wall-clock time, 6x more total operations processed
+
+### L2: The Gap We're Compensating For
+
+Layer 2 (parallel tool calls within a turn) is what Claude Code doesn't
+implement. If it did, each subagent could invoke multiple tools simultaneously.
+We compensate by maximizing L1 and L3.
 
 ### Combined Effect: What You Actually Get
 
@@ -103,32 +128,28 @@ Claude Code's Task tool allows spawning multiple subagents in one message.
 
 ---
 
-## The Three-Layer Architecture
+## Architecture Deep Dive
 
-### Why Three Layers?
-
-Through testing, we discovered that Claude Code doesn't implement parallel tool
-calls within a single agent turn, despite the API supporting it. We compensate
-with layers we CAN control:
+For those wanting more detail on the three-layer model introduced above:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                        THREE-LAYER PARALLELISM ARCHITECTURE                      │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                 │
-│  LAYER 1: SUBAGENT PARALLELISM                                                  │
-│  ═══════════════════════════════                                                │
+│  L1: SUBAGENT PARALLELISM (✅ Works)                                            │
+│  ═══════════════════════════════════                                            │
 │  Main session spawns multiple Task tools in ONE message                         │
 │  Effect: Horizontal scaling (more agents working simultaneously)                │
 │  NOT a speedup for fixed work — it's throughput scaling                         │
 │                                                                                 │
-│  LAYER 2: TOOL CALL PARALLELISM                                                 │
-│  ═════════════════════════════════                                              │
-│  ⚠️  API supports this. Claude Code DOES NOT implement it.                      │
-│  We cannot control this layer.                                                  │
+│  L2: TOOL CALL PARALLELISM (❌ Not implemented)                                 │
+│  ═════════════════════════════════════════════                                  │
+│  The Claude API supports this. Claude Code does not use it.                     │
+│  We cannot control this layer — hence this toolkit's existence.                 │
 │                                                                                 │
-│  LAYER 3: MCP-CLI PARALLELISM                                                   │
-│  ════════════════════════════════                                               │
+│  L3: MCP-CLI PARALLELISM (✅ Works)                                             │
+│  ═════════════════════════════════                                              │
 │  Background jobs within Bash: `mcp-cli ... &`                                   │
 │  Effect: Genuine speedup (2x-18x for same operations)                           │
 │  THIS IS THE PRIMARY VALUE of this toolkit                                      │
@@ -136,13 +157,13 @@ with layers we CAN control:
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Layer Comparison
+### Comparison: Speedup vs Throughput
 
-| Layer | What It Provides    | Speedup for Fixed Work | Throughput Scaling |
-| ----- | ------------------- | ---------------------- | ------------------ |
-| L1    | Parallel subagents  | ~1x (marginal)         | **~6x**            |
-| L2    | Parallel tool calls | N/A (not implemented)  | N/A                |
-| L3    | Parallel MCP-CLI    | **2x-18x**             | ~1x                |
+| Layer | What It Provides    | Speedup (same work) | Throughput (more work) |
+| ----- | ------------------- | ------------------- | ---------------------- |
+| L1    | Parallel subagents  | ~1x (marginal)      | **~6x**                |
+| L2    | Parallel tool calls | N/A (gap)           | N/A                    |
+| L3    | Parallel MCP-CLI    | **2x-18x**          | ~1x                    |
 
 ---
 

@@ -36,7 +36,7 @@ metrics — don't conflate them.
 Layer 1: SUBAGENT PARALLELISM
 ═════════════════════════════
 Main session invokes multiple Task tools in ONE message
-All subagents execute concurrently (6-8x multiplier)
+All subagents execute concurrently (~6x throughput)
 
 Layer 2: TOOL CALL PARALLELISM (NOT IMPLEMENTED)
 ═══════════════════════════════════════════════
@@ -45,7 +45,7 @@ Each subagent's tool calls are sequential within a turn
 
 Layer 3: MCP-CLI PARALLELISM
 ════════════════════════════
-Background jobs within Bash tool calls (18x multiplier)
+Background jobs within Bash tool calls (2x-18x speedup)
 mcp-cli call A > /tmp/a.json &
 mcp-cli call B > /tmp/b.json &
 wait

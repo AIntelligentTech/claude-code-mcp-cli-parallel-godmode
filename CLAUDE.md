@@ -10,10 +10,13 @@ See `.claude/rules/mcp-parallel.md` for complete enforcement rules.
 
 ## What This Provides
 
-**L3 (MCP-CLI Parallelism):** Genuine 2x-18x speedup for batch operations.
+| Layer | Name                 | Effect                                     |
+| ----- | -------------------- | ------------------------------------------ |
+| L1    | Subagent parallelism | ~6x throughput (more work, same time)      |
+| L2    | Tool call parallel   | ❌ Not implemented (the gap we compensate) |
+| L3    | MCP-CLI parallelism  | **2x-18x speedup** (same work, less time)  |
 
-**L1 (Subagent Parallelism):** Horizontal throughput scaling (~6x more work at
-similar latency). NOT additional speedup for fixed operations.
+**Primary value:** L3. **Secondary value:** L1 for horizontal scaling.
 
 ---
 

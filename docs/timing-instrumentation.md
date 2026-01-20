@@ -234,7 +234,7 @@ The session metrics parser at `~/.claude/scripts/metrics/session-metrics-parser.
 already tracks:
 
 - Total tool calls by type
-- Parallelization adoption (Level 1 and Level 2)
+- Parallelization adoption (L1 subagent and L3 MCP-CLI)
 - Session durations
 
 **Recommended enhancement:** Add per-phase timing extraction to correlate with

@@ -13,13 +13,14 @@ invocations).
 Claude Code has an architectural gap: the Claude API supports parallel tool
 calls, but Claude Code does not implement this. We compensate with three layers:
 
-| Layer | What                             | Status             | Multiplier |
-| ----- | -------------------------------- | ------------------ | ---------- |
-| L1    | Subagent parallelism (Task tool) | ✅ Works           | 6-8x       |
-| L2    | Tool call parallelism            | ❌ Not implemented | N/A        |
-| L3    | MCP-CLI parallelism (Bash `&`)   | ✅ Works           | 18x        |
+| Layer | What                             | Status             | Effect         |
+| ----- | -------------------------------- | ------------------ | -------------- |
+| L1    | Subagent parallelism (Task tool) | ✅ Works           | ~6x throughput |
+| L2    | Tool call parallelism            | ❌ Not implemented | N/A            |
+| L3    | MCP-CLI parallelism (Bash `&`)   | ✅ Works           | 2x-18x speedup |
 
-**Combined effect:** L1 × L3 = **100+ parallel operations**
+**Combined effect:** L1 + L3 enables **100+ parallel operations** (throughput
+scaling, not multiplicative speedup)
 
 ---
 

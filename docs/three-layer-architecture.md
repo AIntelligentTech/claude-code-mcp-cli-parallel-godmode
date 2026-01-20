@@ -15,11 +15,11 @@ within a single agent turn.
 
 We compensate with **three layers of parallelism**:
 
-| Layer | Mechanism | Status | Multiplier |
-|-------|-----------|--------|------------|
-| L1 | Subagent parallelism (Task tool) | ✅ Works | 6-8x |
-| L2 | Tool call parallelism (per turn) | ❌ Not implemented | N/A |
-| L3 | MCP-CLI parallelism (Bash `&`) | ✅ Works | 18x |
+| Layer | Mechanism                        | Status             | Effect              |
+| ----- | -------------------------------- | ------------------ | ------------------- |
+| L1    | Subagent parallelism (Task tool) | ✅ Works           | ~6x throughput      |
+| L2    | Tool call parallelism (per turn) | ❌ Not implemented | N/A                 |
+| L3    | MCP-CLI parallelism (Bash `&`)   | ✅ Works           | 2x-18x speedup      |
 
 **Key distinction:**
 - L3 provides **speedup** (2x-18x for same work)
@@ -91,7 +91,7 @@ Main Session Message:
 **Key insight:** Claude Code DOES support invoking multiple Task tools in one
 message. This is Layer 1 parallelism.
 
-**Multiplier:** 6-8 agents in parallel = 6-8x throughput
+**Effect:** Multiple agents in parallel = ~6x throughput (not speedup)
 
 ### Layer 2: Tool Call Parallelism (NOT IMPLEMENTED)
 
