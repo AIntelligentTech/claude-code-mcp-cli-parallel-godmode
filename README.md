@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Turn 3-minute MCP workflows into 10-second operations**
+**Turn 60-second MCP workflows into 9-second operations**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-2.1.12+-blue.svg)](https://claude.ai/claude-code)
@@ -12,8 +12,11 @@
 | :--------: | :----------: | :---------------: |
 | 76 seconds | 4.9 seconds  |  **~2 seconds**   |
 
-_Complete briefing data (15 MCP calls + files) in 9 seconds instead of 3+
-minutes_
+_MCP data gathering (25-30 operations) in ~9 seconds — **6-7x faster**_
+
+> **Scope:** This toolkit optimizes **MCP-CLI operations** specifically. For
+> complex workflows with subagents, git analysis, or synthesis, see
+> [Scope & Limitations](#scope--limitations).
 
 </div>
 
@@ -92,6 +95,38 @@ Claude Code can invoke multiple Bash tools simultaneously. Combined with Level
 
 **Result:** 4×5 parallel calls performs similarly to 1×20 — layers compose
 without penalty.
+
+---
+
+## Scope & Limitations
+
+### What This Toolkit Optimizes
+
+✅ **MCP-CLI operations** — Calls to Google Workspace, GitHub, claude-mem, etc.
+✅ **File reads** — Parallel Read tool invocations in same message ✅ **Schema
+checks** — Parallel `mcp-cli info` operations
+
+### What This Toolkit Does NOT Optimize
+
+❌ **Subagent lifecycle** — Each `Task` tool invocation has ~2-3s startup
+overhead ❌ **Internal agent operations** — Agents run their own operations
+sequentially ❌ **Token processing** — LLM synthesis is inherently sequential
+
+### Example: Full Briefing Breakdown
+
+A complete AI Co-Founder briefing includes multiple layers:
+
+| Layer                   | Time        | Optimized by this toolkit? |
+| ----------------------- | ----------- | -------------------------- |
+| MCP data gathering      | ~9s         | ✅ **Yes** (from ~60s)     |
+| Subagent orchestration  | ~20-30s     | ❌ No (architectural)      |
+| Git analysis (125+ ops) | ~30-60s     | ❌ No (internal to agent)  |
+| Synthesis               | ~20-40s     | ❌ No (token processing)   |
+| **End-to-end**          | **90-180s** | ~50s saved                 |
+
+**Bottom line:** MCP parallelization provides **6-7x speedup for the MCP
+layer**, saving ~50 seconds per briefing. Full workflows still take 2-3 minutes
+due to other layers.
 
 ---
 
@@ -497,11 +532,14 @@ Google Workspace + GitHub + local files), see:
 
 Key findings from production testing (January 2026):
 
-| Pattern               | Time     | Improvement    |
-| --------------------- | -------- | -------------- |
-| Sequential baseline   | ~3-4 min | —              |
-| Level 1 only          | ~90s     | 2-3x faster    |
-| **Level 1 + Level 2** | **~9s**  | **20x faster** |
+| Layer               | Sequential | Parallel | Speedup  |
+| ------------------- | ---------- | -------- | -------- |
+| **MCP operations**  | ~60s       | ~9s      | **6-7x** |
+| End-to-end briefing | ~3-4 min   | ~2-3 min | ~1.5x    |
+
+> **Note:** The 6-7x speedup applies to MCP operations specifically. Full
+> briefings include subagent orchestration, git analysis, and synthesis which
+> add 70-130 seconds beyond the MCP layer.
 
 ### Critical Insight: Combined Execute + Read
 
@@ -518,22 +556,26 @@ wait
 cat /tmp/r1.json  # Same Bash block
 ```
 
-### Level 2 Verified
+### Level 2 Verified (MCP Layer Only)
 
 Multiple Bash tools in a single Claude message **truly run in parallel**:
 
 ```
 Single message with 3 Bash tools + 4 Read tools:
 ├─ Bash 1: 5 calendar calls (1.5s)  ─┐
-├─ Bash 2: 5 task calls (1.5s)      ─┼─ All parallel
+├─ Bash 2: 5 task calls (1.5s)      ─┼─ All parallel (MCP layer)
 ├─ Bash 3: Gmail + Git (1.0s)       ─┘
 ├─ Read: GOALS.md                    ─┐
-├─ Read: COMMITMENTS.md              ─┼─ All parallel
+├─ Read: COMMITMENTS.md              ─┼─ All parallel (file reads)
 ├─ Read: CLIENTS.md                  ─┘
 └─ Read: EXPENSES.md
 
-Total: ~3 seconds for 15 MCP calls + 4 files
+MCP Layer: ~3 seconds for 15 MCP calls + 4 files
 ```
+
+> **Note:** This measures MCP data gathering only. Full briefings include
+> additional layers (subagent orchestration, git analysis, synthesis) that add
+> 70-130 seconds.
 
 ---
 
