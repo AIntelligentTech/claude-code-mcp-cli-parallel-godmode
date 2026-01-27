@@ -1,0 +1,16 @@
+# Agent OS Standards Index
+
+global:
+  error-handling:
+    description: Needs description - run /index-standards
+  git:
+    description: Needs description - run /index-standards
+  logging:
+    description: Needs description - run /index-standards
+  naming:
+    description: Needs description - run /index-standards
+  project-structure:
+    description: Needs description - run /index-standards
+  tech-stack:
+    description: Needs description - run /index-standards
+
