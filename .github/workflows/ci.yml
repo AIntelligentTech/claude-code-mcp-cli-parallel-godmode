@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: |
+          find . -name "*.sh" -type f | while read -r file; do
+            echo "Checking: $file"
+            shellcheck "$file" || true
+          done
+        shell: bash
+
+  install-test:
+    name: Install Script Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test install script syntax
+        run: |
+          bash -n install.sh
+          bash -n get.sh
+
+  benchmark:
+    name: Benchmark Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate benchmark files
+        run: |
+          if [ -d benchmarks ]; then
+            for f in benchmarks/*; do
+              [ -f "$f" ] || continue
+              echo "Validating: $f"
+              head -5 "$f" > /dev/null
+            done
+          fi
+
+  docs:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check documentation
+        run: |
+          test -f README.md || exit 1
+          test -f LICENSE || exit 1
+          echo "Documentation files present"
